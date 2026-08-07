@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://helene2406.github.io/les-cabots-de-fernelmont/sitemap.xml
+Sitemap: https://helene2406.github.io/lescabotsdefernelmont/sitemap.xml
