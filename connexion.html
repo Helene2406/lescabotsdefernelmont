@@ -80,7 +80,8 @@
 
       const membreDoc = await getDoc(doc(db, 'membres', cred.user.uid));
       if (!membreDoc.exists()) {
-        errorBox.textContent = "Compte non configuré. Contactez Katia.";
+        errorBox.textContent = "Compte non configuré. UID recherché : " + cred.user.uid;
+        console.log("UID recherché dans Firestore (collection membres) :", cred.user.uid);
         errorBox.classList.add('show');
         loginBtn.disabled = false;
         loginBtn.textContent = 'Se connecter';
