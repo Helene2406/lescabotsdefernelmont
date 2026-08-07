@@ -1,0 +1,36 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function estConnecte() {
+      return request.auth != null;
+    }
+    function estAdmin() {
+      return estConnecte() &&
+        get(/databases/$(database)/documents/membres/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /membres/{uid} {
+      allow read: if estConnecte() && (request.auth.uid == uid || estAdmin());
+      allow create: if estAdmin();
+      allow update: if estAdmin() || (estConnecte() && request.auth.uid == uid);
+      allow delete: if estAdmin();
+    }
+
+    match /groupes/{id} {
+      allow read: if estConnecte();
+      allow write: if estAdmin();
+    }
+
+    match /presences/{id} {
+      allow read: if estConnecte();
+      allow create, update: if estConnecte();
+      allow delete: if estAdmin();
+    }
+
+    match /annulations/{id} {
+      allow read: if estConnecte();
+      allow write: if estAdmin();
+    }
+  }
+}

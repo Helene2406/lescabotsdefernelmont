@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Administration — Les Cabots de Fernelmont</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body class="app-body">
+
+<div class="app-topbar">
+  <div class="app-title">Bonjour <span id="adminNom">Katia</span> <small>Espace administrateur</small></div>
+  <div style="display:flex; align-items:center; gap:8px;">
+    <button class="btn-sm" id="logoutBtn" style="background:transparent; border-color:rgba(255,255,255,0.4); color:#fff;">Déconnexion</button>
+    <a class="app-home-link" href="index.html" title="Retour au site" aria-label="Retour au site">⌂</a>
+  </div>
+</div>
+
+<main class="app-main">
+
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="cesoir">Ce soir</button>
+    <button class="tab-btn" data-tab="groupes">Groupes</button>
+    <button class="tab-btn" data-tab="membres">Membres</button>
+  </div>
+
+  <div id="panel-cesoir" class="tab-panel">
+    <div class="app-panel">
+      <div class="section-heading"><h2>Cours de ce soir</h2></div>
+      <div class="data-list" id="listeCeSoir"><div class="empty-state">Chargement...</div></div>
+    </div>
+  </div>
+
+  <div id="panel-groupes" class="tab-panel hidden">
+    <div class="app-panel">
+      <div class="section-heading">
+        <h2>Groupes</h2>
+        <button class="btn-sm primary" id="btnAjouterGroupe">+ Ajouter un groupe</button>
+      </div>
+      <div class="data-list" id="listeGroupes"><div class="empty-state">Chargement...</div></div>
+    </div>
+  </div>
+
+  <div id="panel-membres" class="tab-panel hidden">
+    <div class="app-panel">
+      <div class="section-heading">
+        <h2>Membres</h2>
+        <button class="btn-sm primary" id="btnAjouterMembre">+ Ajouter un membre</button>
+      </div>
+      <div class="data-list" id="listeMembres"><div class="empty-state">Chargement...</div></div>
+    </div>
+  </div>
+
+</main>
+
+<div id="modalZone"></div>
+
+<script type="module" src="assets/app-admin.js"></script>
+</body>
+</html>

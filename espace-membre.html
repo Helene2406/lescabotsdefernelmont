@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Espace membre — Les Cabots de Fernelmont</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body class="app-body">
+
+<div class="app-topbar">
+  <div class="app-title">Bonjour <span id="membreNom">...</span> <small>Espace membre — <span id="chienNom"></span></small></div>
+  <div style="display:flex; align-items:center; gap:8px;">
+    <button class="btn-sm" id="logoutBtn" style="background:transparent; border-color:rgba(255,255,255,0.4); color:#fff;">Déconnexion</button>
+    <a class="app-home-link" href="index.html" title="Retour au site" aria-label="Retour au site">⌂</a>
+  </div>
+</div>
+
+<main class="app-main">
+
+  <div class="app-panel">
+    <h2>Mon abonnement</h2>
+    <div id="badgesAbo"></div>
+  </div>
+
+  <div class="app-panel">
+    <h2>Mon groupe</h2>
+    <div class="data-list" id="zoneGroupe"><div class="empty-state">Chargement...</div></div>
+  </div>
+
+  <div class="app-panel">
+    <h2>Mes deux prochains cours</h2>
+    <p style="color: var(--slate); font-size: 0.88rem; margin-bottom: 14px;">Une fois votre réponse envoyée, seule Katia peut la modifier.</p>
+    <div class="data-list" id="zoneCours"><div class="empty-state">Chargement...</div></div>
+  </div>
+
+</main>
+
+<script type="module" src="assets/app-membre.js"></script>
+</body>
+</html>
