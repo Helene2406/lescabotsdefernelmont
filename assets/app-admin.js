@@ -7,6 +7,7 @@ import {
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import { getAuth as getAuthSecondary, createUserWithEmailAndPassword, signOut as signOutSecondary }
   from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+import { meteoActuelle, meteoPour, alerteMeteo, iconeCode } from "./meteo.js";
 
 const JOURS = ["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"];
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
@@ -26,6 +27,7 @@ onAuthStateChanged(auth, async (user) => {
   chargerGroupes();
   chargerMembres();
   chargerCeSoir();
+  afficherMeteoDuJour();
 });
 
 document.getElementById('logoutBtn').addEventListener('click', () => signOut(auth).then(() => window.location.href = 'connexion.html'));
@@ -39,6 +41,21 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.getElementById('panel-' + btn.dataset.tab).classList.remove('hidden');
   });
 });
+
+// ==========================================================================
+// MÉTÉO DU JOUR (bandeau)
+// ==========================================================================
+async function afficherMeteoDuJour() {
+  const zone = document.getElementById('meteoDuJour');
+  const m = await meteoActuelle();
+  if (!m) { zone.innerHTML = ''; return; }
+  const dateLabel = new Date().toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
+  zone.innerHTML = `
+    <div class="banner-alert" style="background:#EFF3F6; border-color:#D4DAE0; color:var(--navy-dark); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+      <span>${iconeCode(m.code)} Andenne — ${m.description}, ${m.temperature}°C</span>
+      <span style="text-transform:capitalize;">${dateLabel}</span>
+    </div>`;
+}
 
 // ==========================================================================
 // GROUPES
@@ -295,10 +312,9 @@ function ouvrirModalMembre(membre) {
 }
 
 // ==========================================================================
-// CE SOIR — cours du jour, maintien / annulation
+// CE SOIR — cours du jour, météo, maintien / annulation
 // ==========================================================================
 async function chargerCeSoir() {
-  await Promise.all([]); // groupes déjà chargés via chargerGroupes()
   const jourAujourdhui = JOURS[new Date().getDay()];
   const dateISO = new Date().toISOString().slice(0, 10);
   const wrap = document.getElementById('listeCeSoir');
@@ -313,10 +329,13 @@ async function chargerCeSoir() {
   const annulations = {};
   annulSnap.forEach(d => { annulations[d.id] = d.data(); });
 
-  wrap.innerHTML = groupesDuJour.map(g => {
+  const lignes = await Promise.all(groupesDuJour.map(async (g) => {
     const cle = `${g.id}_${dateISO}`;
     const annule = annulations[cle];
     const nbMembres = currentMembres.filter(m => m.groupeId === g.id).length;
+    const m = await meteoPour(dateISO, g.heureDebut);
+    const alerte = alerteMeteo(m);
+
     return `
     <div class="data-row">
       <div class="data-main">
@@ -324,7 +343,9 @@ async function chargerCeSoir() {
         <div class="data-sub">
           ${nbMembres} chiens inscrits
           ${annule ? `<span class="badge badge-danger">Annulé — ${escapeHtml(annule.motif)}</span>` : `<span class="badge badge-ok">Maintenu</span>`}
+          ${m ? `<span class="badge badge-neutral">${iconeCode(m.code)} ${m.temperature}°C · pluie ${m.pluie}%</span>` : ''}
         </div>
+        ${alerte && !annule ? `<div class="banner-alert" style="margin-top:8px; padding:8px 12px; ${alerte.niveau==='danger' ? 'background:#FBEAEA;border-color:#E3B4B4;color:#8A2E2E;' : ''}">⚠️ ${alerte.texte} — pense à vérifier si le cours doit être maintenu.</div>` : ''}
       </div>
       <div class="data-actions">
         ${annule
@@ -332,7 +353,9 @@ async function chargerCeSoir() {
           : `<button class="btn-sm danger" onclick="window.annulerCours('${g.id}','${dateISO}')">Annuler ce cours</button>`}
       </div>
     </div>`;
-  }).join('');
+  }));
+
+  wrap.innerHTML = lignes.join('');
 }
 
 window.annulerCours = async (groupeId, dateISO) => {

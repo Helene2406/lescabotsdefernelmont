@@ -2,6 +2,7 @@ import {
   auth, db, onAuthStateChanged, signOut,
   doc, getDoc, setDoc, getDocs, collection
 } from "./firebase-config.js";
+import { meteoPour, alerteMeteo, iconeCode } from "./meteo.js";
 
 const JOURS = ["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"];
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
@@ -80,20 +81,24 @@ async function afficherProchainsCours() {
   presSnap.forEach(d => { presences[d.id] = d.data(); });
 
   const wrap = document.getElementById('zoneCours');
-  wrap.innerHTML = dates.map(d => {
+
+  const lignes = await Promise.all(dates.map(async (d) => {
     const dateISO = d.toISOString().slice(0, 10);
     const dateLabel = d.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
     const cleAnnul = `${groupeData.id}_${dateISO}`;
     const clePres = `${groupeData.id}_${dateISO}_${membreUid}`;
     const annule = annulations[cleAnnul];
     const presence = presences[clePres];
+    const m = await meteoPour(dateISO, groupeData.heureDebut);
+    const alerte = alerteMeteo(m);
+    const meteoBadge = m ? `<span class="badge badge-neutral">${iconeCode(m.code)} ${m.temperature}°C · pluie ${m.pluie}%</span>` : '';
 
     if (annule) {
       return `
       <div class="data-row">
         <div class="data-main">
           <div class="data-title">${capitalize(dateLabel)} — ${groupeData.heureDebut}</div>
-          <div class="data-sub"><span class="badge badge-danger">Cours annulé — ${escapeHtml(annule.motif)}</span></div>
+          <div class="data-sub"><span class="badge badge-danger">Cours annulé — ${escapeHtml(annule.motif)}</span> ${meteoBadge}</div>
         </div>
       </div>`;
     }
@@ -115,10 +120,14 @@ async function afficherProchainsCours() {
     <div class="data-row">
       <div class="data-main">
         <div class="data-title">${capitalize(dateLabel)} — ${groupeData.heureDebut}</div>
-        <div class="data-sub">${statutHtml}</div>
+        <div class="data-sub">${meteoBadge}</div>
+        ${alerte ? `<div class="banner-alert" style="margin-top:8px; padding:8px 12px;">⚠️ ${alerte.texte}, une annulation est possible.</div>` : ''}
+        ${statutHtml}
       </div>
     </div>`;
-  }).join('');
+  }));
+
+  wrap.innerHTML = lignes.join('');
 }
 
 window.repondrePresence = async (dateISO, statut) => {
