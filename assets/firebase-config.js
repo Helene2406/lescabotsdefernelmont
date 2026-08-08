@@ -10,7 +10,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
   getFirestore,
-  doc, getDoc, setDoc, updateDoc, deleteDoc,
+  doc, getDoc, getDocFromServer, setDoc, updateDoc, deleteDoc,
   collection, addDoc, getDocs, query, where, orderBy,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
@@ -30,7 +30,7 @@ export const db = getFirestore(app);
 
 export {
   signInWithEmailAndPassword, signOut, onAuthStateChanged,
-  doc, getDoc, setDoc, updateDoc, deleteDoc,
+  doc, getDoc, getDocFromServer, setDoc, updateDoc, deleteDoc,
   collection, addDoc, getDocs, query, where, orderBy,
   serverTimestamp
 };
