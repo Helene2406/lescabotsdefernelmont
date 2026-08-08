@@ -73,15 +73,23 @@
     identifiant = identifiant.charAt(0).toUpperCase() + identifiant.slice(1);
     const motdepasse = pwInput.value;
 
+    let cred;
     try {
       const email = identifiantVersEmail(identifiant);
-      const cred = await signInWithEmailAndPassword(auth, email, motdepasse);
+      cred = await signInWithEmailAndPassword(auth, email, motdepasse);
       localStorage.setItem('cabots_dernier_identifiant', identifiant);
+    } catch (err) {
+      errorBox.textContent = "Identifiant ou mot de passe incorrect. (" + err.code + ")";
+      errorBox.classList.add('show');
+      loginBtn.disabled = false;
+      loginBtn.textContent = 'Se connecter';
+      return;
+    }
 
+    try {
       const membreDoc = await getDoc(doc(db, 'membres', cred.user.uid));
       if (!membreDoc.exists()) {
         errorBox.textContent = "Compte non configuré. UID recherché : " + cred.user.uid;
-        console.log("UID recherché dans Firestore (collection membres) :", cred.user.uid);
         errorBox.classList.add('show');
         loginBtn.disabled = false;
         loginBtn.textContent = 'Se connecter';
@@ -90,7 +98,7 @@
       const role = membreDoc.data().role;
       window.location.href = role === 'admin' ? 'admin.html' : 'espace-membre.html';
     } catch (err) {
-      errorBox.textContent = "Identifiant ou mot de passe incorrect.";
+      errorBox.textContent = "Erreur Firestore : " + err.code + " — " + err.message;
       errorBox.classList.add('show');
       loginBtn.disabled = false;
       loginBtn.textContent = 'Se connecter';
