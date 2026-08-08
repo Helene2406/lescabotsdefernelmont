@@ -43,7 +43,7 @@
 </div>
 
 <script type="module">
-  import { auth, signInWithEmailAndPassword, onAuthStateChanged, identifiantVersEmail, db, doc, getDoc }
+  import { auth, signInWithEmailAndPassword, onAuthStateChanged, identifiantVersEmail, db, doc, getDoc, collection, getDocs, query, where }
     from "./assets/firebase-config.js";
 
   const form = document.getElementById('loginForm');
@@ -87,14 +87,16 @@
     }
 
     try {
-      const membreDoc = await getDoc(doc(db, 'membres', cred.user.uid));
-      if (!membreDoc.exists()) {
-        errorBox.textContent = "Compte non configuré. UID recherché : " + cred.user.uid;
+      const q = query(collection(db, 'membres'), where('identifiant', '==', identifiant));
+      const snap = await getDocs(q);
+      if (snap.empty) {
+        errorBox.textContent = "Compte non configuré pour l'identifiant \"" + identifiant + "\". UID connecté : " + cred.user.uid;
         errorBox.classList.add('show');
         loginBtn.disabled = false;
         loginBtn.textContent = 'Se connecter';
         return;
       }
+      const membreDoc = snap.docs[0];
       const role = membreDoc.data().role;
       window.location.href = role === 'admin' ? 'admin.html' : 'espace-membre.html';
     } catch (err) {
