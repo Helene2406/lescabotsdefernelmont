@@ -1,6 +1,6 @@
 import {
   auth, db, onAuthStateChanged, signOut,
-  doc, getDoc, getDocAvecReessai, setDoc, getDocs, collection, addDoc, updateDoc, query, orderBy
+  doc, getDoc, getDocAvecReessai, setDoc, getDocs, collection, addDoc, updateDoc, query, orderBy, where
 } from "./firebase-config.js";
 import { meteoPour, alerteMeteo, iconeCode } from "./meteo.js";
 
@@ -64,6 +64,7 @@ function afficherAccueil() {
   afficherRappelCotisation();
   preremplirMonProfil();
   afficherMesChiens();
+  chargerHistoriquePaiementsMembre();
 }
 
 function afficherRappelAbonnement() {
@@ -104,17 +105,18 @@ function afficherRappelCotisation() {
   const aujourdhui = new Date(); aujourdhui.setHours(0,0,0,0);
   const dansUnMois = new Date(aujourdhui); dansUnMois.setMonth(aujourdhui.getMonth() + 1);
   const echeance = new Date(membreData.cotisationDateEcheance + 'T00:00:00');
-
-  if (echeance > dansUnMois) { zone.innerHTML = ''; return; }
-
   const dateLabel = echeance.toLocaleDateString('fr-BE', { day: 'numeric', month: 'long', year: 'numeric' });
 
+  const infoDate = `<p style="font-size:0.85rem; color:var(--slate); margin:0 0 8px;">Vous êtes en ordre de cotisation jusqu'au <strong>${dateLabel}</strong>.</p>`;
+
+  if (echeance > dansUnMois) { zone.innerHTML = infoDate; return; }
+
   if (membreData.cotisationRenouvellement) {
-    zone.innerHTML = `<div class="banner-alert">Cotisation jusqu'au ${dateLabel} — vous avez indiqué : <strong>${membreData.cotisationRenouvellement === 'oui' ? 'je souhaite renouveler' : 'je ne souhaite pas renouveler'}</strong>. Katia s'en occupe.</div>`;
+    zone.innerHTML = infoDate + `<div class="banner-alert">Cotisation jusqu'au ${dateLabel} — vous avez indiqué : <strong>${membreData.cotisationRenouvellement === 'oui' ? 'je souhaite renouveler' : 'je ne souhaite pas renouveler'}</strong>. Katia s'en occupe.</div>`;
     return;
   }
 
-  zone.innerHTML = `
+  zone.innerHTML = infoDate + `
     <div class="banner-alert">
       Votre cotisation arrive à échéance le ${dateLabel}. Souhaitez-vous la renouveler ?
       <div class="presence-btns">
@@ -499,7 +501,9 @@ function afficherMesChiens() {
     wrap.innerHTML = '<p style="color:var(--slate); font-size:0.85rem;">Aucun chien enregistré pour l\'instant.</p>';
     return;
   }
-  wrap.innerHTML = chiens.map(c => `
+  wrap.innerHTML = chiens.map(c => {
+    const alertesVaccins = alerteVaccinsChien(c);
+    return `
     <div class="dog-card">
       <div class="dog-card-head">
         <div>
@@ -511,7 +515,9 @@ function afficherMesChiens() {
           <button class="btn-sm danger" type="button" onclick="window.archiverMonChien('${c.id}')">Archiver</button>
         </div>
       </div>
-    </div>`).join('');
+      ${alertesVaccins.length ? `<div class="banner-alert" style="margin-top:10px; padding:8px 12px;">💉 ${alertesVaccins.join(', ')}</div>` : ''}
+    </div>`;
+  }).join('');
 }
 
 document.getElementById('mc-ajouter').addEventListener('click', () => window.ouvrirFormChien(null));
@@ -613,3 +619,49 @@ window.archiverMonChien = async (chienId) => {
   afficherMesChiens();
   document.getElementById('chienNom').textContent = nomsChiensActifs();
 };
+
+// ==========================================================================
+// HISTORIQUE DE MES PAIEMENTS (lecture seule)
+// ==========================================================================
+async function chargerHistoriquePaiementsMembre() {
+  const zone = document.getElementById('zonePaiements');
+  const snap = await getDocs(query(collection(db, 'paiements'), where('membreId', '==', membreUid)));
+  const paiements = [];
+  snap.forEach(d => paiements.push(d.data()));
+  paiements.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+  if (paiements.length === 0) {
+    zone.innerHTML = '<div class="empty-state">Aucun paiement enregistré pour l\'instant.</div>';
+    return;
+  }
+  zone.innerHTML = paiements.map(p => `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(p.type)} — ${Number(p.montant).toFixed(2)} € TTC</div>
+        <div class="data-sub">${p.date || ''}${p.note ? ' · ' + escapeHtml(p.note) : ''}</div>
+      </div>
+    </div>`).join('');
+}
+
+// ==========================================================================
+// VACCINS — échéances calculées à 1 an après la dernière date indiquée
+// ==========================================================================
+const LABELS_VACCINS_MEMBRE = { leptospirose: 'Leptospirose', parvovirose: 'Parvovirose', touxChenils: 'Toux du chenil', rage: 'Rage' };
+
+function alerteVaccinsChien(chien) {
+  const aujourdhui = new Date(); aujourdhui.setHours(0,0,0,0);
+  const dans30Jours = new Date(aujourdhui); dans30Jours.setDate(aujourdhui.getDate() + 30);
+  const v = chien.vaccins || {};
+  const alertes = [];
+  Object.keys(LABELS_VACCINS_MEMBRE).forEach(cle => {
+    const date = v[cle]?.date;
+    if (!date) return;
+    const echeance = new Date(date + 'T00:00:00');
+    echeance.setFullYear(echeance.getFullYear() + 1);
+    if (echeance <= dans30Jours) {
+      const enRetard = echeance < aujourdhui;
+      alertes.push(`${LABELS_VACCINS_MEMBRE[cle]}${enRetard ? ' en retard' : ' à renouveler bientôt'}`);
+    }
+  });
+  return alertes;
+}

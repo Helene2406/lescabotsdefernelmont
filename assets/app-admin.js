@@ -30,7 +30,7 @@ onAuthStateChanged(auth, async (user) => {
   chargerConversations();
   chargerAnniversaires();
   chargerCotisationsARenouveler();
-  chargerAbonnementsARenouveler();
+  chargerAbonnementsARenouveler(); chargerVaccinsARappeler();
   chargerCeSoir();
   afficherMeteoDuJour();
   chargerTarifs();
@@ -383,7 +383,7 @@ function ouvrirModalImportMembres() {
 
     resultZone.textContent = `${succes} membre(s) importé(s) avec succès.` + (erreurs.length ? '\n' + erreurs.join('\n') : '');
     btn.disabled = false;
-    chargerMembres().then(() => { chargerConversations(); chargerAnniversaires(); chargerCotisationsARenouveler(); chargerAbonnementsARenouveler(); });
+    chargerMembres().then(() => { chargerConversations(); chargerAnniversaires(); chargerCotisationsARenouveler(); chargerAbonnementsARenouveler(); chargerVaccinsARappeler(); });
   });
 }
 
@@ -395,7 +395,7 @@ window.editerMembre = (id) => {
 window.archiverMembre = async (id) => {
   if (!confirm('Archiver ce membre ? Il ne pourra plus se connecter mais ses données seront conservées.')) return;
   await updateDoc(doc(db, 'membres', id), { archive: true });
-  chargerMembres().then(() => { chargerConversations(); chargerAnniversaires(); chargerCotisationsARenouveler(); chargerAbonnementsARenouveler(); });
+  chargerMembres().then(() => { chargerConversations(); chargerAnniversaires(); chargerCotisationsARenouveler(); chargerAbonnementsARenouveler(); chargerVaccinsARappeler(); });
 };
 
 function optionsMarqueVaccin(valeurActuelle) {
@@ -468,6 +468,12 @@ function ouvrirModalMembre(membre) {
         </div>
         ${isEdit && membre.cotisationRenouvellement ? `<p style="font-size:0.85rem; color:var(--slate);">Réponse du membre au renouvellement : <strong>${membre.cotisationRenouvellement === 'oui' ? 'Oui, elle/il souhaite renouveler' : 'Non, elle/il ne souhaite pas renouveler'}</strong></p>` : ''}
 
+        ${isEdit ? `
+        <h3 style="margin-top:18px;">Paiements</h3>
+        <button class="btn-sm" type="button" onclick="window.ouvrirModalPaiement('${membre.id}')">+ Enregistrer un paiement</button>
+        <div id="mm-historiquePaiements" style="margin-top:10px;"><div class="empty-state">Chargement...</div></div>
+        ` : ''}
+
         <div class="modal-actions">
           <button class="btn-sm" onclick="window.fermerModal()">Annuler</button>
           <button class="btn-sm primary" id="mm-save">Enregistrer</button>
@@ -477,6 +483,7 @@ function ouvrirModalMembre(membre) {
   document.getElementById('modalZone').innerHTML = html;
   remplirSelectGroupes();
   if (isEdit && membre.groupeId) document.getElementById('mm-groupe').value = membre.groupeId;
+  if (isEdit) chargerHistoriquePaiements(membre.id);
 
   document.getElementById('mm-save').addEventListener('click', async () => {
     const btnSave = document.getElementById('mm-save');
@@ -508,7 +515,7 @@ function ouvrirModalMembre(membre) {
     if (isEdit) {
       await updateDoc(doc(db, 'membres', membre.id), data);
       window.fermerModal();
-      chargerMembres().then(() => { chargerConversations(); chargerAnniversaires(); chargerCotisationsARenouveler(); chargerAbonnementsARenouveler(); });
+      chargerMembres().then(() => { chargerConversations(); chargerAnniversaires(); chargerCotisationsARenouveler(); chargerAbonnementsARenouveler(); chargerVaccinsARappeler(); });
     } else {
       let identifiant = document.getElementById('mm-identifiant').value.trim();
       const mdp = document.getElementById('mm-mdp').value;
@@ -536,7 +543,7 @@ function ouvrirModalMembre(membre) {
         });
         await signOutSecondary(secondaryAuth);
         window.fermerModal();
-        chargerMembres().then(() => { chargerConversations(); chargerAnniversaires(); chargerCotisationsARenouveler(); chargerAbonnementsARenouveler(); });
+        chargerMembres().then(() => { chargerConversations(); chargerAnniversaires(); chargerCotisationsARenouveler(); chargerAbonnementsARenouveler(); chargerVaccinsARappeler(); });
       } catch (err) {
         alert("Impossible de créer ce membre : " + (err.code === 'auth/email-already-in-use' ? 'cet identifiant existe déjà.' : err.message));
         btnSave.disabled = false;
@@ -666,7 +673,85 @@ window.archiverChien = async (membreId, chienId) => {
   ouvrirModalMembre(membre);
 };
 
+// ==========================================================================
+// PAIEMENTS — historique par membre, enregistrement manuel par l'admin
+// ==========================================================================
+async function chargerHistoriquePaiements(membreId) {
+  const zone = document.getElementById('mm-historiquePaiements');
+  if (!zone) return;
+  const snap = await getDocs(query(collection(db, 'paiements'), where('membreId', '==', membreId)));
+  const paiements = [];
+  snap.forEach(d => paiements.push({ id: d.id, ...d.data() }));
+  paiements.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
+  if (paiements.length === 0) {
+    zone.innerHTML = '<div class="empty-state">Aucun paiement enregistré.</div>';
+    return;
+  }
+  zone.innerHTML = paiements.map(p => `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(p.type)} — ${Number(p.montant).toFixed(2)} € TTC</div>
+        <div class="data-sub">${p.date || ''}${p.note ? ' · ' + escapeHtml(p.note) : ''}</div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm danger" onclick="window.supprimerPaiement('${p.id}', '${membreId}')">Supprimer</button>
+      </div>
+    </div>`).join('');
+}
+
+window.ouvrirModalPaiement = (membreId) => {
+  const html = `
+    <div class="modal-overlay" id="modalOverlayPaiement">
+      <div class="modal-box">
+        <h3>Enregistrer un paiement</h3>
+        <div class="field"><label>Type</label>
+          <select id="pay-type">
+            <option value="Cotisation">Cotisation</option>
+            <option value="Abonnement">Abonnement</option>
+            <option value="Autre">Autre</option>
+          </select>
+        </div>
+        <div class="form-grid">
+          <div class="field"><label>Montant (€ TTC)</label><input type="number" step="0.01" id="pay-montant"></div>
+          <div class="field"><label>Date</label><input type="date" id="pay-date" value="${new Date().toISOString().slice(0,10)}"></div>
+        </div>
+        <div class="field"><label>Note (optionnel)</label><input id="pay-note" placeholder="ex: viré le 12/03"></div>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" onclick="document.getElementById('modalOverlayPaiement').remove()">Annuler</button>
+          <button class="btn-sm primary" type="button" id="pay-save">Enregistrer</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+
+  document.getElementById('pay-save').addEventListener('click', async () => {
+    const montant = parseFloat(document.getElementById('pay-montant').value);
+    if (isNaN(montant)) { alert('Merci d\'indiquer un montant.'); return; }
+    await addDoc(collection(db, 'paiements'), {
+      membreId,
+      type: document.getElementById('pay-type').value,
+      montant,
+      date: document.getElementById('pay-date').value,
+      note: document.getElementById('pay-note').value.trim(),
+      createdAt: serverTimestamp()
+    });
+    document.getElementById('modalOverlayPaiement').remove();
+    chargerHistoriquePaiements(membreId);
+  });
+};
+
+window.supprimerPaiement = async (paiementId, membreId) => {
+  if (!confirm('Supprimer ce paiement de l\'historique ?')) return;
+  await deleteDoc(doc(db, 'paiements', paiementId));
+  chargerHistoriquePaiements(membreId);
+};
+
+// ==========================================================================
+// CE SOIR — cours du jour, météo, maintien / annulation
+// ==========================================================================
+async function chargerCeSoir() {
+  const jourAujourdhui = JOURS[new Date().getDay()];
   const dateISO = new Date().toISOString().slice(0, 10);
   const wrap = document.getElementById('listeCeSoir');
 
@@ -1300,4 +1385,45 @@ async function traiterAbsencesAutomatiques() {
     await updateDoc(doc(db, 'presences', p.id), { compteAbonnement: true });
   }
   renderMembres();
+}
+
+// ==========================================================================
+// VACCINS — rappel des échéances (30 jours) ou retards, calculées à 1 an
+// après la date de dernière vaccination indiquée.
+// ==========================================================================
+const LABELS_VACCINS = { leptospirose: 'Leptospirose', parvovirose: 'Parvovirose', touxChenils: 'Toux du chenil', rage: 'Rage' };
+
+function calculerEcheancesVaccins(chien) {
+  const v = chien.vaccins || {};
+  const resultats = [];
+  Object.keys(LABELS_VACCINS).forEach(cle => {
+    const date = v[cle]?.date;
+    if (!date) return;
+    const echeance = new Date(date + 'T00:00:00');
+    echeance.setFullYear(echeance.getFullYear() + 1);
+    resultats.push({ vaccin: LABELS_VACCINS[cle], echeance });
+  });
+  return resultats;
+}
+
+async function chargerVaccinsARappeler() {
+  const zone = document.getElementById('vaccinsARappeler');
+  if (!zone) return;
+  const aujourdhui = new Date(); aujourdhui.setHours(0,0,0,0);
+  const dans30Jours = new Date(aujourdhui); dans30Jours.setDate(aujourdhui.getDate() + 30);
+
+  const lignes = [];
+  currentMembres.forEach(m => {
+    (m.chiens || []).filter(c => !c.archive).forEach(c => {
+      calculerEcheancesVaccins(c).forEach(({ vaccin, echeance }) => {
+        if (echeance <= dans30Jours) {
+          const enRetard = echeance < aujourdhui;
+          lignes.push(`${escapeHtml(c.nom)} (${escapeHtml(m.nomMaitre)}) — ${vaccin}${enRetard ? ' en retard' : ' à renouveler bientôt'}`);
+        }
+      });
+    });
+  });
+
+  if (lignes.length === 0) { zone.innerHTML = ''; return; }
+  zone.innerHTML = `<div class="banner-alert">💉 Vaccins à surveiller : ${lignes.join(', ')}</div>`;
 }
