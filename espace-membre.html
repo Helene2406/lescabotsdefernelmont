@@ -26,12 +26,83 @@
   <div class="app-panel">
     <h2>Mon abonnement</h2>
     <div id="badgesAbo"></div>
+    <div id="zoneAbonnementRappel" style="margin-top:12px;"></div>
     <div id="zoneCotisation" style="margin-top:12px;"></div>
   </div>
 
   <div class="app-panel">
     <h2>Mon groupe</h2>
     <div class="data-list" id="zoneGroupe"><div class="empty-state">Chargement...</div></div>
+  </div>
+
+  <div class="app-panel">
+    <h2>Mon profil</h2>
+    <p style="color:var(--slate); font-size:0.85rem; margin-bottom:14px;">
+      Complétez et tenez à jour vos informations et celles de votre chien. Katia peut les voir, mais seule elle peut modifier votre abonnement et vos paiements.
+    </p>
+
+    <h3>Coordonnées</h3>
+    <div class="form-grid">
+      <div class="field"><label>GSM</label><input id="mp-gsm" placeholder="ex: 0032 4XX XX XX XX"></div>
+      <div class="field"><label>E-mail</label><input type="email" id="mp-email" placeholder="ex: nom@exemple.be"></div>
+    </div>
+    <div class="field"><label>Adresse postale</label><input id="mp-adresse" placeholder="rue, numéro, code postal, ville"></div>
+    <div class="field"><label>Date d'anniversaire</label><input type="date" id="mp-anniversaire"></div>
+
+    <h3 style="margin-top:18px;">Mon chien</h3>
+    <div class="form-grid">
+      <div class="field"><label>Nom du chien</label><input id="mp-chienNom"></div>
+      <div class="field"><label>Race</label><input id="mp-chienRace"></div>
+      <div class="field"><label>Date de naissance</label><input type="date" id="mp-chienNaissance"></div>
+      <div class="field"><label>Sexe</label>
+        <select id="mp-chienSexe">
+          <option value="male">Mâle</option>
+          <option value="femelle">Femelle</option>
+        </select>
+      </div>
+      <div class="field"><label>Castré / Stérilisée</label>
+        <select id="mp-chienSterilise">
+          <option value="non">Non</option>
+          <option value="oui">Oui</option>
+        </select>
+      </div>
+      <div class="field"><label>Date (si oui)</label><input type="date" id="mp-chienDateSterilisation"></div>
+      <div class="field"><label>N° de puce</label><input id="mp-chienPuce"></div>
+      <div class="field"><label>N° de passeport</label><input id="mp-chienPasseport"></div>
+      <div class="field"><label>Pedigree</label>
+        <select id="mp-chienPedigree">
+          <option value="non">Non</option>
+          <option value="oui">Oui</option>
+        </select>
+      </div>
+    </div>
+
+    <h3 style="margin-top:18px;">Vaccins</h3>
+    <div class="form-grid">
+      <div class="field"><label>Leptospirose — marque</label>
+        <select id="mp-vaxLepto-marque"><option value="">—</option><option value="Eurican">Eurican</option><option value="Versican">Versican</option><option value="Nobivac">Nobivac</option><option value="Autres">Autres</option></select>
+      </div>
+      <div class="field"><label>Leptospirose — date</label><input type="date" id="mp-vaxLepto-date"></div>
+      <div class="field"><label>Parvovirose — marque</label>
+        <select id="mp-vaxParvo-marque"><option value="">—</option><option value="Eurican">Eurican</option><option value="Versican">Versican</option><option value="Nobivac">Nobivac</option><option value="Autres">Autres</option></select>
+      </div>
+      <div class="field"><label>Parvovirose — date</label><input type="date" id="mp-vaxParvo-date"></div>
+      <div class="field"><label>Toux du chenil — marque</label>
+        <select id="mp-vaxToux-marque"><option value="">—</option><option value="Eurican">Eurican</option><option value="Versican">Versican</option><option value="Nobivac">Nobivac</option><option value="Autres">Autres</option></select>
+      </div>
+      <div class="field"><label>Toux du chenil — date</label><input type="date" id="mp-vaxToux-date"></div>
+      <div class="field"><label>Rage — date</label><input type="date" id="mp-vaxRage-date"></div>
+    </div>
+
+    <h3 style="margin-top:18px;">Assurance RC familiale</h3>
+    <div class="form-grid">
+      <div class="field"><label>Compagnie</label><input id="mp-rcCompagnie"></div>
+      <div class="field"><label>N° de police</label><input id="mp-rcNumero"></div>
+      <div class="field"><label>Échéance (mois/année)</label><input type="month" id="mp-rcEcheance"></div>
+    </div>
+
+    <p id="mp-statut" style="font-size:0.85rem; color:var(--slate); margin-top:10px;"></p>
+    <button class="btn-sm primary" id="mp-enregistrer" style="margin-top:8px;">Enregistrer mes informations</button>
   </div>
 
   <div class="app-panel">

@@ -10,10 +10,17 @@ service cloud.firestore {
         get(/databases/$(database)/documents/membres/$(request.auth.uid)).data.role == 'admin';
     }
 
+    function champsAutorisesMembre() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['nomMaitre','gsm','email','adressePostale','dateAnniversaire',
+                  'chien','vaccins','assuranceRC',
+                  'cotisationRenouvellement','abonnementRenouvellement']);
+    }
+
     match /membres/{uid} {
       allow read: if estConnecte() && (request.auth.uid == uid || estAdmin());
       allow create: if estAdmin();
-      allow update: if estAdmin() || (estConnecte() && request.auth.uid == uid);
+      allow update: if estAdmin() || (estConnecte() && request.auth.uid == uid && champsAutorisesMembre());
       allow delete: if estAdmin();
     }
 
