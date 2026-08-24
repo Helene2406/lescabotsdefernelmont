@@ -24,8 +24,12 @@ onAuthStateChanged(auth, async (user) => {
     return;
   }
   document.getElementById('adminNom').textContent = mDoc.data().nomMaitre || 'Katia';
-  chargerGroupes();
-  chargerMembres().then(() => { chargerConversations(); chargerAnniversaires(); chargerCotisationsARenouveler(); });
+  await chargerGroupes();
+  await chargerMembres();
+  chargerConversations();
+  chargerAnniversaires();
+  chargerCotisationsARenouveler();
+  chargerAbonnementsARenouveler();
   chargerCeSoir();
   afficherMeteoDuJour();
   chargerTarifs();
@@ -341,7 +345,7 @@ function ouvrirModalImportMembres() {
 
     resultZone.textContent = `${succes} membre(s) importé(s) avec succès.` + (erreurs.length ? '\n' + erreurs.join('\n') : '');
     btn.disabled = false;
-    chargerMembres().then(() => { chargerAnniversaires(); chargerCotisationsARenouveler(); });
+    chargerMembres().then(() => { chargerAnniversaires(); chargerCotisationsARenouveler(); chargerAbonnementsARenouveler(); });
   });
 }
 
@@ -403,6 +407,14 @@ function ouvrirModalMembre(membre) {
             </select>
           </div>
           <div class="field"><label>Date (si oui)</label><input type="date" id="mm-chienDateSterilisation" value="${isEdit ? (membre.chien?.dateSterilisation||'') : ''}"></div>
+          <div class="field"><label>N° de puce</label><input id="mm-chienPuce" value="${isEdit ? escapeAttr(membre.chien?.puce||'') : ''}"></div>
+          <div class="field"><label>N° de passeport</label><input id="mm-chienPasseport" value="${isEdit ? escapeAttr(membre.chien?.passeport||'') : ''}"></div>
+          <div class="field"><label>Pedigree</label>
+            <select id="mm-chienPedigree">
+              <option value="non" ${isEdit && !membre.chien?.pedigree ? 'selected':''}>Non</option>
+              <option value="oui" ${isEdit && membre.chien?.pedigree ? 'selected':''}>Oui</option>
+            </select>
+          </div>
         </div>
 
         <h3 style="margin-top:18px;">Vaccins</h3>
@@ -458,6 +470,10 @@ function ouvrirModalMembre(membre) {
   if (isEdit && membre.groupeId) document.getElementById('mm-groupe').value = membre.groupeId;
 
   document.getElementById('mm-save').addEventListener('click', async () => {
+    const btnSave = document.getElementById('mm-save');
+    btnSave.disabled = true;
+    btnSave.textContent = 'Enregistrement...';
+
     const data = {
       nomMaitre: document.getElementById('mm-nomMaitre').value.trim(),
       gsm: document.getElementById('mm-gsm').value.trim(),
@@ -470,7 +486,10 @@ function ouvrirModalMembre(membre) {
         naissance: document.getElementById('mm-chienNaissance').value,
         sexe: document.getElementById('mm-chienSexe').value,
         sterilise: document.getElementById('mm-chienSterilise').value === 'oui',
-        dateSterilisation: document.getElementById('mm-chienDateSterilisation').value
+        dateSterilisation: document.getElementById('mm-chienDateSterilisation').value,
+        puce: document.getElementById('mm-chienPuce').value.trim(),
+        passeport: document.getElementById('mm-chienPasseport').value.trim(),
+        pedigree: document.getElementById('mm-chienPedigree').value === 'oui'
       },
       vaccins: {
         leptospirose: { marque: document.getElementById('mm-vaxLepto-marque').value, date: document.getElementById('mm-vaxLepto-date').value },
@@ -489,12 +508,12 @@ function ouvrirModalMembre(membre) {
       cotisationPayee: document.getElementById('mm-cotisPaye').value === 'oui',
       cotisationDateEcheance: document.getElementById('mm-cotisEcheance').value
     };
-    if (!data.nomMaitre) { alert('Merci d\'indiquer le nom du maître.'); return; }
+    if (!data.nomMaitre) { alert('Merci d\'indiquer le nom du maître.'); btnSave.disabled = false; btnSave.textContent = 'Enregistrer'; return; }
 
     if (isEdit) {
       await updateDoc(doc(db, 'membres', membre.id), data);
       window.fermerModal();
-      chargerMembres().then(() => { chargerAnniversaires(); chargerCotisationsARenouveler(); });
+      chargerMembres().then(() => { chargerAnniversaires(); chargerCotisationsARenouveler(); chargerAbonnementsARenouveler(); });
     } else {
       let identifiant = document.getElementById('mm-identifiant').value.trim();
       const mdp = document.getElementById('mm-mdp').value;
@@ -520,9 +539,11 @@ function ouvrirModalMembre(membre) {
         });
         await signOutSecondary(secondaryAuth);
         window.fermerModal();
-        chargerMembres().then(() => { chargerAnniversaires(); chargerCotisationsARenouveler(); });
+        chargerMembres().then(() => { chargerAnniversaires(); chargerCotisationsARenouveler(); chargerAbonnementsARenouveler(); });
       } catch (err) {
         alert("Impossible de créer ce membre : " + (err.code === 'auth/email-already-in-use' ? 'cet identifiant existe déjà.' : err.message));
+        btnSave.disabled = false;
+        btnSave.textContent = 'Enregistrer';
       }
     }
   });
@@ -601,7 +622,7 @@ function escapeAttr(str) { return escapeHtml(str); }
 // ==========================================================================
 async function chargerTarifs() {
   const configDoc = await getDoc(doc(db, 'tarifs', 'config'));
-  const data = configDoc.exists() ? configDoc.data() : { abonnement: 80, coursUnite: 8, cotisation: 70, individuel: 85 };
+  const data = configDoc.exists() ? configDoc.data() : { abonnement: 70, coursUnite: 8, cotisation: 70, individuel: 85 };
   document.getElementById('tf-abonnement').value = data.abonnement;
   document.getElementById('tf-coursUnite').value = data.coursUnite;
   document.getElementById('tf-cotisation').value = data.cotisation;
@@ -1102,3 +1123,28 @@ async function chargerCotisationsARenouveler() {
       }).join(', ')}
     </div>`;
 }
+
+// ==========================================================================
+// ABONNEMENTS — rappel quand il reste peu de cours
+// ==========================================================================
+async function chargerAbonnementsARenouveler() {
+  const zone = document.getElementById('abonnementsARenouveler');
+  if (!zone) return;
+
+  const concernes = currentMembres.filter(m => (m.coursRestants ?? 0) <= 2);
+  if (concernes.length === 0) { zone.innerHTML = ''; return; }
+
+  const configDoc = await getDoc(doc(db, 'tarifs', 'config'));
+  const prixAbonnement = configDoc.exists() ? configDoc.data().abonnement : 70;
+
+  zone.innerHTML = `
+    <div class="banner-alert">
+      📚 Abonnement${concernes.length > 1 ? 's' : ''} bientôt épuisé${concernes.length > 1 ? 's' : ''} : ${concernes.map(m => {
+        const epuise = (m.coursRestants ?? 0) <= 0;
+        const reponse = m.abonnementRenouvellement === 'oui' ? ` (a dit oui — facture ${prixAbonnement.toFixed(2)}€ TTC pour 11 cours possible)`
+          : m.abonnementRenouvellement === 'non' ? ' (a dit non)' : ' (pas encore répondu)';
+        return `${escapeHtml(m.nomMaitre)} — ${m.coursRestants ?? 0} cours restant(s)${epuise ? ', épuisé' : ''}${reponse}`;
+      }).join(', ')}
+    </div>`;
+}
+

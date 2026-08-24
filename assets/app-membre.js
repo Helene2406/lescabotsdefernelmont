@@ -56,8 +56,42 @@ function afficherAccueil() {
     ? `<span class="badge badge-ok">Cotisation à jour</span>`
     : `<span class="badge badge-warn">Cotisation à régler</span>`;
   document.getElementById('badgesAbo').innerHTML = badgeAbo + ' ' + badgeCotis;
+  afficherRappelAbonnement();
   afficherRappelCotisation();
+  preremplirMonProfil();
 }
+
+function afficherRappelAbonnement() {
+  const zone = document.getElementById('zoneAbonnementRappel');
+  const reste = membreData.coursRestants ?? 0;
+
+  if (reste > 2) { zone.innerHTML = ''; return; }
+
+  if (reste <= 0) {
+    zone.innerHTML = `<div class="banner-alert" style="background:#FBEAEA; border-color:#E3B4B4; color:#8A2E2E;">Votre abonnement est épuisé, vous ne pouvez plus vous inscrire à un cours. Contactez Katia pour renouveler.</div>`;
+    return;
+  }
+
+  if (membreData.abonnementRenouvellement) {
+    zone.innerHTML = `<div class="banner-alert">Il vous reste ${reste} cours — vous avez indiqué : <strong>${membreData.abonnementRenouvellement === 'oui' ? 'je souhaite renouveler' : 'je ne souhaite pas renouveler'}</strong>. Katia s'en occupe.</div>`;
+    return;
+  }
+
+  zone.innerHTML = `
+    <div class="banner-alert">
+      Il vous reste ${reste} cours sur votre abonnement. Souhaitez-vous le renouveler (11 cours) ?
+      <div class="presence-btns">
+        <button class="btn-sm primary" onclick="window.repondreAbonnement('oui')">Oui, je renouvelle</button>
+        <button class="btn-sm" onclick="window.repondreAbonnement('non')">Non, pas pour l'instant</button>
+      </div>
+    </div>`;
+}
+
+window.repondreAbonnement = async (reponse) => {
+  await updateDoc(doc(db, 'membres', membreUid), { abonnementRenouvellement: reponse });
+  membreData.abonnementRenouvellement = reponse;
+  afficherRappelAbonnement();
+};
 
 function afficherRappelCotisation() {
   const zone = document.getElementById('zoneCotisation');
@@ -151,6 +185,8 @@ async function afficherProchainsCours() {
       statutHtml = presence.statut === 'present'
         ? '<span class="badge badge-ok">Présence confirmée</span>'
         : '<span class="badge badge-neutral">Absence signalée</span>';
+    } else if ((membreData.coursRestants ?? 0) <= 0) {
+      statutHtml = '<span class="badge badge-danger">Abonnement épuisé — contactez Katia</span>';
     } else {
       statutHtml = `
         <div class="presence-btns">
@@ -174,6 +210,10 @@ async function afficherProchainsCours() {
 }
 
 window.repondrePresence = async (dateISO, statut) => {
+  if (statut === 'present' && (membreData.coursRestants ?? 0) <= 0) {
+    alert('Votre abonnement est épuisé. Contactez Katia pour le renouveler avant de vous inscrire à un cours.');
+    return;
+  }
   const cle = `${groupeData.id}_${dateISO}_${membreUid}`;
   await setDoc(doc(db, 'presences', cle), {
     groupeId: groupeData.id, uid: membreUid, dateISO, statut,
@@ -194,7 +234,7 @@ function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 async function chargerTarifs() {
   const configDoc = await getDoc(doc(db, 'tarifs', 'config'));
   const wrap = document.getElementById('zoneTarifs');
-  const data = configDoc.exists() ? configDoc.data() : { abonnement: 80, coursUnite: 8, cotisation: 70, individuel: 85 };
+  const data = configDoc.exists() ? configDoc.data() : { abonnement: 70, coursUnite: 8, cotisation: 70, individuel: 85 };
 
   const lignesBase = [
     ['Abonnement (10 cours + 1 gratuit)', data.abonnement],
@@ -377,3 +417,87 @@ window.ajouterCommentaire = async (videoId) => {
   });
   chargerVideosMembre();
 };
+
+// ==========================================================================
+// MON PROFIL — le membre encode/modifie ses propres infos
+// ==========================================================================
+function preremplirMonProfil() {
+  const v = membreData.vaccins || {};
+  const rc = membreData.assuranceRC || {};
+  const c = membreData.chien || {};
+
+  document.getElementById('mp-gsm').value = membreData.gsm || '';
+  document.getElementById('mp-email').value = membreData.email || '';
+  document.getElementById('mp-adresse').value = membreData.adressePostale || '';
+  document.getElementById('mp-anniversaire').value = membreData.dateAnniversaire || '';
+
+  document.getElementById('mp-chienNom').value = c.nom || '';
+  document.getElementById('mp-chienRace').value = c.race || '';
+  document.getElementById('mp-chienNaissance').value = c.naissance || '';
+  document.getElementById('mp-chienSexe').value = c.sexe || 'male';
+  document.getElementById('mp-chienSterilise').value = c.sterilise ? 'oui' : 'non';
+  document.getElementById('mp-chienDateSterilisation').value = c.dateSterilisation || '';
+  document.getElementById('mp-chienPuce').value = c.puce || '';
+  document.getElementById('mp-chienPasseport').value = c.passeport || '';
+  document.getElementById('mp-chienPedigree').value = c.pedigree ? 'oui' : 'non';
+
+  document.getElementById('mp-vaxLepto-marque').value = v.leptospirose?.marque || '';
+  document.getElementById('mp-vaxLepto-date').value = v.leptospirose?.date || '';
+  document.getElementById('mp-vaxParvo-marque').value = v.parvovirose?.marque || '';
+  document.getElementById('mp-vaxParvo-date').value = v.parvovirose?.date || '';
+  document.getElementById('mp-vaxToux-marque').value = v.touxChenils?.marque || '';
+  document.getElementById('mp-vaxToux-date').value = v.touxChenils?.date || '';
+  document.getElementById('mp-vaxRage-date').value = v.rage?.date || '';
+
+  document.getElementById('mp-rcCompagnie').value = rc.compagnie || '';
+  document.getElementById('mp-rcNumero').value = rc.numeroPolice || '';
+  document.getElementById('mp-rcEcheance').value = rc.dateEcheance || '';
+}
+
+document.getElementById('mp-enregistrer').addEventListener('click', async () => {
+  const btn = document.getElementById('mp-enregistrer');
+  const statut = document.getElementById('mp-statut');
+  btn.disabled = true;
+  statut.textContent = 'Enregistrement...';
+
+  const data = {
+    gsm: document.getElementById('mp-gsm').value.trim(),
+    email: document.getElementById('mp-email').value.trim(),
+    adressePostale: document.getElementById('mp-adresse').value.trim(),
+    dateAnniversaire: document.getElementById('mp-anniversaire').value,
+    chien: {
+      ...membreData.chien,
+      nom: document.getElementById('mp-chienNom').value.trim(),
+      race: document.getElementById('mp-chienRace').value.trim(),
+      naissance: document.getElementById('mp-chienNaissance').value,
+      sexe: document.getElementById('mp-chienSexe').value,
+      sterilise: document.getElementById('mp-chienSterilise').value === 'oui',
+      dateSterilisation: document.getElementById('mp-chienDateSterilisation').value,
+      puce: document.getElementById('mp-chienPuce').value.trim(),
+      passeport: document.getElementById('mp-chienPasseport').value.trim(),
+      pedigree: document.getElementById('mp-chienPedigree').value === 'oui'
+    },
+    vaccins: {
+      leptospirose: { marque: document.getElementById('mp-vaxLepto-marque').value, date: document.getElementById('mp-vaxLepto-date').value },
+      parvovirose: { marque: document.getElementById('mp-vaxParvo-marque').value, date: document.getElementById('mp-vaxParvo-date').value },
+      touxChenils: { marque: document.getElementById('mp-vaxToux-marque').value, date: document.getElementById('mp-vaxToux-date').value },
+      rage: { date: document.getElementById('mp-vaxRage-date').value }
+    },
+    assuranceRC: {
+      compagnie: document.getElementById('mp-rcCompagnie').value.trim(),
+      numeroPolice: document.getElementById('mp-rcNumero').value.trim(),
+      dateEcheance: document.getElementById('mp-rcEcheance').value
+    }
+  };
+
+  try {
+    await updateDoc(doc(db, 'membres', membreUid), data);
+    membreData = { ...membreData, ...data };
+    document.getElementById('membreNom').textContent = membreData.nomMaitre || '';
+    document.getElementById('chienNom').textContent = membreData.chien?.nom || '';
+    statut.textContent = 'Informations enregistrées ✓';
+  } catch (e) {
+    statut.textContent = 'Erreur : ' + e.message;
+  }
+  btn.disabled = false;
+});
