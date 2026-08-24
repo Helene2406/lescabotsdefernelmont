@@ -25,13 +25,14 @@ onAuthStateChanged(auth, async (user) => {
   }
   document.getElementById('adminNom').textContent = mDoc.data().nomMaitre || 'Katia';
   chargerGroupes();
-  chargerMembres().then(() => chargerConversations());
+  chargerMembres().then(() => { chargerConversations(); chargerAnniversaires(); });
   chargerCeSoir();
   afficherMeteoDuJour();
   chargerTarifs();
   chargerRdv();
   chargerArticles();
   chargerVideosAdmin();
+  console.log('%c🍓 Un petit jardin secret pour toi, Katia...', 'color:#C0392B; font-size:13px;');
 });
 
 document.getElementById('logoutBtn').addEventListener('click', () => signOut(auth).then(() => window.location.href = 'connexion.html'));
@@ -224,6 +225,7 @@ function ouvrirModalMembre(membre) {
         </div>` : ''}
         <div class="field"><label>Nom du maître</label><input id="mm-nomMaitre" value="${isEdit ? escapeAttr(membre.nomMaitre) : ''}"></div>
         <div class="field"><label>GSM</label><input id="mm-gsm" value="${isEdit ? escapeAttr(membre.gsm||'') : ''}" placeholder="ex: 0032 4XX XX XX XX"></div>
+        <div class="field"><label>Date d'anniversaire</label><input type="date" id="mm-anniversaire" value="${isEdit ? (membre.dateAnniversaire||'') : ''}"></div>
         <div class="form-grid">
           <div class="field"><label>Nom du chien</label><input id="mm-chienNom" value="${isEdit ? escapeAttr(membre.chien?.nom||'') : ''}"></div>
           <div class="field"><label>Race</label><input id="mm-chienRace" value="${isEdit ? escapeAttr(membre.chien?.race||'') : ''}"></div>
@@ -265,6 +267,7 @@ function ouvrirModalMembre(membre) {
     const data = {
       nomMaitre: document.getElementById('mm-nomMaitre').value.trim(),
       gsm: document.getElementById('mm-gsm').value.trim(),
+      dateAnniversaire: document.getElementById('mm-anniversaire').value,
       chien: {
         nom: document.getElementById('mm-chienNom').value.trim(),
         race: document.getElementById('mm-chienRace').value.trim(),
@@ -281,7 +284,7 @@ function ouvrirModalMembre(membre) {
     if (isEdit) {
       await updateDoc(doc(db, 'membres', membre.id), data);
       window.fermerModal();
-      chargerMembres();
+      chargerMembres().then(() => chargerAnniversaires());
     } else {
       let identifiant = document.getElementById('mm-identifiant').value.trim();
       const mdp = document.getElementById('mm-mdp').value;
@@ -307,7 +310,7 @@ function ouvrirModalMembre(membre) {
         });
         await signOutSecondary(secondaryAuth);
         window.fermerModal();
-        chargerMembres();
+        chargerMembres().then(() => chargerAnniversaires());
       } catch (err) {
         alert("Impossible de créer ce membre : " + (err.code === 'auth/email-already-in-use' ? 'cet identifiant existe déjà.' : err.message));
       }
@@ -826,4 +829,37 @@ function ouvrirModalVideo(video) {
     window.fermerModal();
     chargerVideosAdmin();
   });
+}
+
+// ==========================================================================
+// ANNIVERSAIRES — rappel des anniversaires proches (7 jours)
+// ==========================================================================
+async function chargerAnniversaires() {
+  const zone = document.getElementById('anniversairesDuJour');
+  if (!zone) return;
+  const aujourdhui = new Date();
+  const dansUneSemaine = new Date();
+  dansUneSemaine.setDate(aujourdhui.getDate() + 7);
+
+  const proches = currentMembres.filter(m => {
+    if (!m.dateAnniversaire) return false;
+    const parts = m.dateAnniversaire.split('-').map(Number);
+    const mois = parts[1], jour = parts[2];
+    let candidate = new Date(aujourdhui.getFullYear(), mois - 1, jour);
+    const debutJourAuj = new Date(aujourdhui.getFullYear(), aujourdhui.getMonth(), aujourdhui.getDate());
+    if (candidate < debutJourAuj) {
+      candidate = new Date(aujourdhui.getFullYear() + 1, mois - 1, jour);
+    }
+    return candidate <= dansUneSemaine;
+  });
+
+  if (proches.length === 0) { zone.innerHTML = ''; return; }
+
+  zone.innerHTML = `
+    <div class="banner-alert">
+      🎂 Anniversaire${proches.length > 1 ? 's' : ''} à venir : ${proches.map(m => {
+        const parts = m.dateAnniversaire.split('-').map(Number);
+        return `${escapeHtml(m.nomMaitre)} (${parts[2]}/${parts[1]})`;
+      }).join(', ')}
+    </div>`;
 }

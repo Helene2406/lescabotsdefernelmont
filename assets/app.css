@@ -387,3 +387,13 @@
 .comment-item .comment-auteur { font-weight: 600; color: var(--navy-dark); margin-right: 6px; }
 .comment-input-row { display: flex; gap: 8px; margin-top: 10px; }
 .comment-input-row input { flex: 1; }
+
+/* Petit jardin secret 🍓 */
+.secret-fraise {
+  position: fixed;
+  font-size: 14px;
+  opacity: 0.12;
+  pointer-events: none;
+  z-index: 5;
+  user-select: none;
+}
