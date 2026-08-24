@@ -1,6 +1,6 @@
 import {
   auth, db, onAuthStateChanged, signOut,
-  doc, getDoc, setDoc, updateDoc, deleteDoc,
+  doc, getDoc, getDocAvecReessai, setDoc, updateDoc, deleteDoc,
   collection, addDoc, getDocs, query, where,
   serverTimestamp, identifiantVersEmail
 } from "./firebase-config.js";
@@ -18,7 +18,7 @@ let currentMembres = [];
 // ---------- Garde d'accès ----------
 onAuthStateChanged(auth, async (user) => {
   if (!user) { window.location.href = 'connexion.html'; return; }
-  const mDoc = await getDoc(doc(db, 'membres', user.uid));
+  const mDoc = await getDocAvecReessai(doc(db, 'membres', user.uid));
   if (!mDoc.exists() || mDoc.data().role !== 'admin') {
     window.location.href = 'connexion.html';
     return;

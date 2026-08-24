@@ -1,6 +1,6 @@
 import {
   auth, db, onAuthStateChanged, signOut,
-  doc, getDoc, setDoc, getDocs, collection, addDoc, updateDoc, query, orderBy
+  doc, getDoc, getDocAvecReessai, setDoc, getDocs, collection, addDoc, updateDoc, query, orderBy
 } from "./firebase-config.js";
 import { meteoPour, alerteMeteo, iconeCode } from "./meteo.js";
 
@@ -13,7 +13,7 @@ let groupeData = null;
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) { window.location.href = 'connexion.html'; return; }
-  const mDoc = await getDoc(doc(db, 'membres', user.uid));
+  const mDoc = await getDocAvecReessai(doc(db, 'membres', user.uid));
   if (!mDoc.exists() || mDoc.data().role !== 'membre') {
     window.location.href = 'connexion.html';
     return;

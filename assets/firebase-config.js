@@ -42,3 +42,15 @@ export {
 export function identifiantVersEmail(identifiant) {
   return identifiant.trim().toLowerCase() + "@membres.cabots-de-fernelmont.local";
 }
+
+// Lecture d'un document avec plusieurs tentatives (absorbe un éventuel
+// petit délai de propagation Firestore juste après une modification).
+export async function getDocAvecReessai(refDoc, maxEssais = 3, delaiMs = 900) {
+  let d = null;
+  for (let i = 0; i < maxEssais; i++) {
+    d = await getDoc(refDoc);
+    if (d.exists()) return d;
+    if (i < maxEssais - 1) await new Promise(r => setTimeout(r, delaiMs));
+  }
+  return d;
+}
