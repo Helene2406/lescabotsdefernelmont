@@ -289,12 +289,20 @@ async function chargerServicesMembre() {
 }
 
 // ==========================================================================
-// RDV
+// RDV — filtré par destinataires, prix par personne, paiement par virement
 // ==========================================================================
+function estInviteAuRdv(rdv) {
+  if (!rdv.destinataires || rdv.destinataires.type === 'tous') return true;
+  if (rdv.destinataires.type === 'groupe') return rdv.destinataires.groupeId === membreData.groupeId;
+  if (rdv.destinataires.type === 'individuel') return (rdv.destinataires.membreIds || []).includes(membreUid);
+  return false;
+}
+
 async function chargerRdv() {
   const snap = await getDocs(collection(db, 'rdv'));
-  const rdvs = [];
+  let rdvs = [];
   snap.forEach(d => rdvs.push({ id: d.id, ...d.data() }));
+  rdvs = rdvs.filter(estInviteAuRdv);
   rdvs.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
   const wrap = document.getElementById('zoneRdv');
@@ -303,23 +311,49 @@ async function chargerRdv() {
     return;
   }
 
+  const paramDoc = await getDoc(doc(db, 'parametres', 'bancaire'));
+  const iban = paramDoc.exists() ? (paramDoc.data().iban || '') : '';
+
   const reponseSnap = await getDocs(collection(db, 'rdv_reponses'));
   const mesReponses = {};
   reponseSnap.forEach(d => {
     const r = d.data();
-    if (r.uid === membreUid) mesReponses[r.rdvId] = r;
+    if (r.uid === membreUid) mesReponses[r.rdvId] = { id: d.id, ...r };
   });
+
+  const nomChien = (membreData.chiens || []).find(c => !c.archive)?.nom || '';
 
   wrap.innerHTML = rdvs.map(rdv => {
     const dateLabel = rdv.date ? new Date(rdv.date + 'T00:00:00').toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' }) : '';
     const maReponse = mesReponses[rdv.id];
     let statutHtml;
+
     if (maReponse) {
-      statutHtml = maReponse.statut === 'present'
-        ? '<span class="badge badge-ok">Vous serez présent(e)</span>'
-        : '<span class="badge badge-neutral">Vous avez signalé votre absence</span>';
+      if (maReponse.statut === 'present') {
+        const communication = `${rdv.titre} ${nomChien} ${rdv.date}`;
+        statutHtml = `<span class="badge badge-ok">Vous serez présent(e)${maReponse.nombrePersonnes > 1 ? ` (${maReponse.nombrePersonnes} pers.)` : ''}</span>`;
+        if (rdv.prixParPersonne) {
+          statutHtml += `
+            <div class="banner-alert" style="margin-top:8px;">
+              Montant à payer : <strong>${Number(maReponse.montant || 0).toFixed(2)} €</strong><br>
+              ${iban ? `Virement sur : <strong>${escapeHtml(iban)}</strong><br>` : ''}
+              Communication : <strong>${escapeHtml(communication)}</strong>
+              <div class="presence-btns" style="margin-top:8px;">
+                ${maReponse.paye
+                  ? '<span class="badge badge-ok">Vous avez indiqué avoir payé</span>' + (maReponse.paiementValide ? ' <span class="badge badge-ok">Validé par Katia</span>' : ' <span class="badge badge-warn">En attente de validation</span>')
+                  : `<button class="btn-sm primary" onclick="window.signalerPaiementRdv('${maReponse.id}')">J'ai payé</button>`}
+              </div>
+            </div>`;
+        }
+      } else {
+        statutHtml = '<span class="badge badge-neutral">Absence signalée</span>';
+      }
     } else {
       statutHtml = `
+        <div class="field" style="max-width:160px;">
+          <label>Nombre de personnes</label>
+          <input type="number" min="1" value="1" id="rd-nb-${rdv.id}" style="width:100%;">
+        </div>
         <div class="presence-btns">
           <button class="btn-sm primary" onclick="window.repondreRdv('${rdv.id}','present')">Je serai présent(e)</button>
           <button class="btn-sm" onclick="window.repondreRdv('${rdv.id}','absent')">Je ne pourrai pas venir</button>
@@ -331,6 +365,7 @@ async function chargerRdv() {
         <div class="data-title">${escapeHtml(rdv.titre)}</div>
         <div class="data-sub">${capitalize(dateLabel)} ${rdv.heure || ''} · ${escapeHtml(rdv.lieu || '')}</div>
         ${rdv.modalite ? `<div class="data-sub">${escapeHtml(rdv.modalite)}</div>` : ''}
+        ${rdv.prixParPersonne ? `<div class="data-sub">${Number(rdv.prixParPersonne).toFixed(2)} € / personne</div>` : ''}
         <div style="margin-top:8px;">${statutHtml}</div>
       </div>
     </div>`;
@@ -338,11 +373,19 @@ async function chargerRdv() {
 }
 
 window.repondreRdv = async (rdvId, statut) => {
+  const rdv = (await getDoc(doc(db, 'rdv', rdvId))).data();
+  const nombrePersonnes = statut === 'present' ? (parseInt(document.getElementById('rd-nb-' + rdvId)?.value, 10) || 1) : 1;
+  const montant = rdv.prixParPersonne ? rdv.prixParPersonne * nombrePersonnes : 0;
   const cle = `${rdvId}_${membreUid}`;
   await setDoc(doc(db, 'rdv_reponses', cle), {
-    rdvId, uid: membreUid, statut, paye: false,
+    rdvId, uid: membreUid, statut, nombrePersonnes, montant, paye: false, paiementValide: false,
     dateReponse: new Date().toISOString()
   });
+  chargerRdv();
+};
+
+window.signalerPaiementRdv = async (reponseId) => {
+  await updateDoc(doc(db, 'rdv_reponses', reponseId), { paye: true });
   chargerRdv();
 };
 

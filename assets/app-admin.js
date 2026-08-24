@@ -751,13 +751,20 @@ window.supprimerPaiement = async (paiementId, membreId) => {
 // CE SOIR — cours du jour, météo, maintien / annulation
 // ==========================================================================
 async function chargerCeSoir() {
-  const jourAujourdhui = JOURS[new Date().getDay()];
-  const dateISO = new Date().toISOString().slice(0, 10);
   const wrap = document.getElementById('listeCeSoir');
 
-  const groupesDuJour = currentGroupes.filter(g => g.jour === jourAujourdhui);
-  if (groupesDuJour.length === 0) {
-    wrap.innerHTML = '<div class="empty-state">Aucun cours prévu aujourd\'hui.</div>';
+  // Construit la liste des occurrences de cours sur les 7 prochains jours
+  // (aujourd'hui inclus), en fonction du jour récurrent de chaque groupe.
+  const occurrences = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + i);
+    const jour = JOURS[d.getDay()];
+    const dateISO = d.toISOString().slice(0, 10);
+    currentGroupes.filter(g => g.jour === jour).forEach(g => occurrences.push({ date: d, dateISO, groupe: g }));
+  }
+
+  if (occurrences.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucun cours prévu cette semaine.</div>';
     return;
   }
 
@@ -766,29 +773,32 @@ async function chargerCeSoir() {
   annulSnap.forEach(d => { annulations[d.id] = d.data(); });
 
   const presSnap = await getDocs(collection(db, 'presences'));
-  const presencesParGroupe = {};
+  const presencesParCle = {};
   presSnap.forEach(d => {
     const p = d.data();
-    if (p.dateISO !== dateISO) return;
-    if (!presencesParGroupe[p.groupeId]) presencesParGroupe[p.groupeId] = { present: 0, absent: 0 };
-    presencesParGroupe[p.groupeId][p.statut === 'present' ? 'present' : 'absent']++;
+    const cle = `${p.groupeId}_${p.dateISO}`;
+    if (!presencesParCle[cle]) presencesParCle[cle] = { present: 0, absent: 0 };
+    presencesParCle[cle][p.statut === 'present' ? 'present' : 'absent']++;
   });
 
   const MIN_PARTICIPANTS = 4;
+  const aujourdhuiISO = new Date().toISOString().slice(0, 10);
 
-  const lignes = await Promise.all(groupesDuJour.map(async (g) => {
+  const lignes = await Promise.all(occurrences.map(async ({ date, dateISO, groupe: g }) => {
     const cle = `${g.id}_${dateISO}`;
     const annule = annulations[cle];
     const nbMembres = currentMembres.filter(m => m.groupeId === g.id).length;
-    const presencesJour = presencesParGroupe[g.id] || { present: 0, absent: 0 };
+    const presencesJour = presencesParCle[cle] || { present: 0, absent: 0 };
     const pasAssez = !annule && presencesJour.present < MIN_PARTICIPANTS;
     const m = await meteoPour(dateISO, g.heureDebut);
     const alerte = alerteMeteo(m);
+    const dateLabel = date.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
+    const estAujourdhui = dateISO === aujourdhuiISO;
 
     return `
     <div class="data-row">
       <div class="data-main">
-        <div class="data-title">${escapeHtml(g.nom)} — ${g.heureDebut}–${g.heureFin}</div>
+        <div class="data-title">${estAujourdhui ? "Ce soir — " : ""}${capitalize(dateLabel)} — ${escapeHtml(g.nom)} (${g.heureDebut}–${g.heureFin})</div>
         <div class="data-sub">
           ${nbMembres} chiens inscrits · <strong>${presencesJour.present}</strong> confirmé(s) présent(s)${presencesJour.absent ? `, ${presencesJour.absent} absent(s)` : ''}
           ${annule ? `<span class="badge badge-danger">Annulé — ${escapeHtml(annule.motif)}</span>` : `<span class="badge badge-ok">Maintenu</span>`}
@@ -807,6 +817,8 @@ async function chargerCeSoir() {
 
   wrap.innerHTML = lignes.join('');
 }
+
+function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
 window.annulerCours = async (groupeId, dateISO) => {
   const motif = prompt('Motif de l\'annulation (pluie / chaleur / pas assez de participants) :');
@@ -959,9 +971,31 @@ document.getElementById('btnInitServices').addEventListener('click', async () =>
 });
 
 // ==========================================================================
-// RDV
+// RDV — destinataires ciblés, prix par personne, suivi de paiement
 // ==========================================================================
+
+async function chargerIban() {
+  const paramDoc = await getDoc(doc(db, 'parametres', 'bancaire'));
+  document.getElementById('rdv-iban').value = paramDoc.exists() ? (paramDoc.data().iban || '') : '';
+}
+
+document.getElementById('btnSauverIban').addEventListener('click', async () => {
+  await setDoc(doc(db, 'parametres', 'bancaire'), { iban: document.getElementById('rdv-iban').value.trim() });
+  alert('IBAN enregistré.');
+});
+
+function libelleDestinataires(rdv) {
+  if (!rdv.destinataires || rdv.destinataires.type === 'tous') return 'Tous les membres';
+  if (rdv.destinataires.type === 'groupe') {
+    const g = currentGroupes.find(g => g.id === rdv.destinataires.groupeId);
+    return 'Groupe : ' + (g ? g.nom : '—');
+  }
+  const noms = (rdv.destinataires.membreIds || []).map(id => currentMembres.find(m => m.id === id)?.nomMaitre).filter(Boolean);
+  return 'Membres : ' + (noms.join(', ') || '—');
+}
+
 async function chargerRdv() {
+  await chargerIban();
   const snap = await getDocs(collection(db, 'rdv'));
   const rdvs = [];
   snap.forEach(d => rdvs.push({ id: d.id, ...d.data() }));
@@ -978,20 +1012,47 @@ async function chargerRdv() {
   reponsesSnap.forEach(d => {
     const r = d.data();
     if (!reponsesParRdv[r.rdvId]) reponsesParRdv[r.rdvId] = [];
-    reponsesParRdv[r.rdvId].push(r);
+    reponsesParRdv[r.rdvId].push({ id: d.id, ...r });
   });
 
   wrap.innerHTML = rdvs.map(rdv => {
     const reponses = reponsesParRdv[rdv.id] || [];
     const presents = reponses.filter(r => r.statut === 'present');
+    const totalPersonnes = presents.reduce((s, r) => s + (r.nombrePersonnes || 1), 0);
+    const totalDu = presents.reduce((s, r) => s + (r.montant || 0), 0);
     const payes = presents.filter(r => r.paye).length;
+    const valides = presents.filter(r => r.paiementValide).length;
     const dateLabel = rdv.date ? new Date(rdv.date + 'T00:00:00').toLocaleDateString('fr-BE', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+
+    const detailPresents = presents.map(r => {
+      const m = currentMembres.find(mm => mm.id === r.uid);
+      return `
+      <div class="data-row">
+        <div class="data-main">
+          <div class="data-title">${escapeHtml(m?.nomMaitre || '?')} ${r.nombrePersonnes > 1 ? `(${r.nombrePersonnes} pers.)` : ''}</div>
+          <div class="data-sub">
+            ${rdv.prixParPersonne ? `${Number(r.montant||0).toFixed(2)} € dû` : ''}
+            ${r.paye ? '<span class="badge badge-ok">A indiqué avoir payé</span>' : '<span class="badge badge-neutral">Pas encore payé</span>'}
+            ${r.paiementValide ? '<span class="badge badge-ok">Paiement validé</span>' : ''}
+          </div>
+        </div>
+        <div class="data-actions">
+          ${!r.paiementValide ? `<button class="btn-sm primary" onclick="window.validerPaiementRdv('${r.id}', '${rdv.id}')">Valider le paiement</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+
     return `
     <div class="data-row">
       <div class="data-main">
         <div class="data-title">${escapeHtml(rdv.titre)}</div>
         <div class="data-sub">${dateLabel} ${rdv.heure || ''} · ${escapeHtml(rdv.lieu || '')} · ${escapeHtml(rdv.modalite || '')}</div>
-        <div class="data-sub"><span class="badge badge-ok">${presents.length} présent(s)</span> <span class="badge badge-neutral">${payes}/${presents.length} payé(s)</span></div>
+        <div class="data-sub">${escapeHtml(libelleDestinataires(rdv))}${rdv.prixParPersonne ? ` · ${Number(rdv.prixParPersonne).toFixed(2)} €/pers.` : ''}</div>
+        <div class="data-sub">
+          <span class="badge badge-ok">${presents.length} réponse(s) présent · ${totalPersonnes} pers.</span>
+          ${rdv.prixParPersonne ? `<span class="badge badge-neutral">${totalDu.toFixed(2)} € attendus</span> <span class="badge badge-neutral">${valides}/${presents.length} paiements validés</span>` : ''}
+        </div>
+        ${presents.length ? `<div style="margin-top:10px;">${detailPresents}</div>` : ''}
       </div>
       <div class="data-actions">
         <button class="btn-sm danger" onclick="window.supprimerRdv('${rdv.id}')">Supprimer</button>
@@ -1011,7 +1072,30 @@ document.getElementById('btnAjouterRdv').addEventListener('click', () => {
           <div class="field"><label>Heure</label><input type="time" id="rd-heure"></div>
         </div>
         <div class="field"><label>Lieu</label><input id="rd-lieu"></div>
-        <div class="field"><label>Modalité</label><input id="rd-modalite" placeholder="ex: 15€/pers, à régler sur place"></div>
+        <div class="field"><label>Modalité (info libre, optionnel)</label><input id="rd-modalite" placeholder="ex: Chacun ramène un plat"></div>
+        <div class="field"><label>Prix par personne (€ TTC, laisser vide si gratuit)</label><input type="number" step="0.01" id="rd-prix"></div>
+
+        <div class="field"><label>Destinataires</label>
+          <select id="rd-destinatairesType">
+            <option value="tous">Tous les membres</option>
+            <option value="groupe">Un groupe</option>
+            <option value="individuel">Membres spécifiques</option>
+          </select>
+        </div>
+        <div class="field hidden" id="rd-groupeWrap">
+          <label>Groupe</label>
+          <select id="rd-groupe">${currentGroupes.map(g => `<option value="${g.id}">${escapeHtml(g.nom)}</option>`).join('')}</select>
+        </div>
+        <div class="field hidden" id="rd-membresWrap">
+          <label>Membres invités</label>
+          <div style="max-height:180px; overflow-y:auto; border:1px solid #D4DAE0; border-radius:6px; padding:8px;">
+            ${currentMembres.map(m => `
+              <label style="display:flex; align-items:center; gap:8px; padding:4px 0; font-size:0.9rem;">
+                <input type="checkbox" class="rd-membre-check" value="${m.id}"> ${escapeHtml(m.nomMaitre)}
+              </label>`).join('')}
+          </div>
+        </div>
+
         <div class="modal-actions">
           <button class="btn-sm" onclick="window.fermerModal()">Annuler</button>
           <button class="btn-sm primary" id="rd-save">Créer</button>
@@ -1019,15 +1103,33 @@ document.getElementById('btnAjouterRdv').addEventListener('click', () => {
       </div>
     </div>`;
   document.getElementById('modalZone').innerHTML = html;
+
+  document.getElementById('rd-destinatairesType').addEventListener('change', (e) => {
+    document.getElementById('rd-groupeWrap').classList.toggle('hidden', e.target.value !== 'groupe');
+    document.getElementById('rd-membresWrap').classList.toggle('hidden', e.target.value !== 'individuel');
+  });
+
   document.getElementById('rd-save').addEventListener('click', async () => {
     const titre = document.getElementById('rd-titre').value.trim();
     const date = document.getElementById('rd-date').value;
     if (!titre || !date) { alert('Merci de renseigner au moins un titre et une date.'); return; }
+
+    const typeDest = document.getElementById('rd-destinatairesType').value;
+    let destinataires = { type: typeDest, groupeId: null, membreIds: [] };
+    if (typeDest === 'groupe') destinataires.groupeId = document.getElementById('rd-groupe').value;
+    if (typeDest === 'individuel') {
+      destinataires.membreIds = [...document.querySelectorAll('.rd-membre-check:checked')].map(c => c.value);
+    }
+
+    const prixVal = document.getElementById('rd-prix').value;
+
     await addDoc(collection(db, 'rdv'), {
       titre, date,
       heure: document.getElementById('rd-heure').value,
       lieu: document.getElementById('rd-lieu').value.trim(),
       modalite: document.getElementById('rd-modalite').value.trim(),
+      prixParPersonne: prixVal === '' ? null : parseFloat(prixVal),
+      destinataires,
       dateCreation: serverTimestamp()
     });
     window.fermerModal();
@@ -1038,6 +1140,11 @@ document.getElementById('btnAjouterRdv').addEventListener('click', () => {
 window.supprimerRdv = async (id) => {
   if (!confirm('Supprimer ce RDV ? Les réponses des membres seront aussi supprimées.')) return;
   await deleteDoc(doc(db, 'rdv', id));
+  chargerRdv();
+};
+
+window.validerPaiementRdv = async (reponseId, rdvId) => {
+  await updateDoc(doc(db, 'rdv_reponses', reponseId), { paiementValide: true });
   chargerRdv();
 };
 
