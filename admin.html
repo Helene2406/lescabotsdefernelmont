@@ -32,7 +32,7 @@
     <button class="tab-btn active" data-tab="cesoir">Ce soir</button>
     <button class="tab-btn" data-tab="groupes">Groupes</button>
     <button class="tab-btn" data-tab="membres">Membres</button>
-    <button class="tab-btn" data-tab="tarifs">Tarifs</button>
+    <button class="tab-btn" data-tab="services">Services</button>
     <button class="tab-btn" data-tab="rdv">RDV</button>
     <button class="tab-btn" data-tab="messages" id="tabMessagesBtn">Messages</button>
     <button class="tab-btn" data-tab="blog">Blog</button>
@@ -77,22 +77,14 @@
     </div>
   </div>
 
-  <div id="panel-tarifs" class="tab-panel hidden">
+  <div id="panel-services" class="tab-panel hidden">
     <div class="app-panel">
-      <div class="section-heading"><h2>Tarifs (TTC, TVA 21% incluse)</h2></div>
-      <div class="form-grid" style="margin-bottom:18px;">
-        <div class="field"><label>Abonnement (10 cours + 1 gratuit)</label><input type="number" step="0.01" id="tf-abonnement"></div>
-        <div class="field"><label>Cours à l'unité</label><input type="number" step="0.01" id="tf-coursUnite"></div>
-        <div class="field"><label>Cotisation annuelle</label><input type="number" step="0.01" id="tf-cotisation"></div>
-        <div class="field"><label>Cours individuel (1h)</label><input type="number" step="0.01" id="tf-individuel"></div>
+      <div class="section-heading">
+        <h2>Services (TTC, TVA 21% incluse)</h2>
+        <button class="btn-sm primary" id="btnAjouterService">+ Ajouter un service</button>
       </div>
-      <button class="btn-sm primary" id="btnSauverTarifs">Enregistrer les tarifs</button>
-
-      <div class="section-heading" style="margin-top:28px;">
-        <h3>Tarifs supplémentaires</h3>
-        <button class="btn-sm" id="btnAjouterTarifExtra">+ Ajouter un tarif</button>
-      </div>
-      <div class="data-list" id="listeTarifsExtra"><div class="empty-state">Chargement...</div></div>
+      <div id="listeServices"><div class="empty-state">Chargement...</div></div>
+      <button class="btn-sm" id="btnInitServices" style="margin-top:14px;">Initialiser les services par défaut</button>
     </div>
   </div>
 

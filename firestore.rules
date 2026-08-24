@@ -40,7 +40,7 @@ service cloud.firestore {
       allow write: if estAdmin();
     }
 
-    match /tarifs/{id} {
+    match /services/{id} {
       allow read: if estConnecte();
       allow write: if estAdmin();
     }
