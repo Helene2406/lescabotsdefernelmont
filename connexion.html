@@ -89,7 +89,19 @@
     try {
       const membreDoc = await getDocFromServer(doc(db, 'membres', cred.user.uid));
       if (!membreDoc.exists()) {
-        errorBox.textContent = "Compte non configuré. UID recherché : " + cred.user.uid;
+        // Test direct via l'API REST Firestore, en dehors du SDK,
+        // pour éliminer tout doute sur un problème de cache/SDK.
+        let detailBrut = '';
+        try {
+          const idToken = await cred.user.getIdToken();
+          const restUrl = `https://firestore.googleapis.com/v1/projects/cabots-de-fernelmont/databases/(default)/documents/membres/${cred.user.uid}`;
+          const restResp = await fetch(restUrl, { headers: { Authorization: 'Bearer ' + idToken } });
+          const restText = await restResp.text();
+          detailBrut = ` — REST(${restResp.status}): ${restText.slice(0, 300)}`;
+        } catch (e2) {
+          detailBrut = ' — REST: erreur ' + e2.message;
+        }
+        errorBox.textContent = "Compte non configuré. UID recherché : " + cred.user.uid + detailBrut;
         errorBox.classList.add('show');
         loginBtn.disabled = false;
         loginBtn.textContent = 'Se connecter';
@@ -105,5 +117,6 @@
     }
   });
 </script>
+<!-- version-diagnostic: 2026-08-24-restcheck -->
 </body>
 </html>
