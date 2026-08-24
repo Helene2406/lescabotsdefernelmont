@@ -93,6 +93,7 @@ function renderGroupes() {
         <div class="data-sub">${JOURS_MAJ[g.jour] || g.jour} · ${g.heureDebut}–${g.heureFin} · ${nbMembres}/${g.participantsMax} chiens</div>
       </div>
       <div class="data-actions">
+        <button class="btn-sm" onclick="window.voirMembresGroupe('${g.id}')">Membres (${nbMembres})</button>
         <button class="btn-sm" onclick="window.editerGroupe('${g.id}')">Modifier</button>
         <button class="btn-sm danger" onclick="window.supprimerGroupe('${g.id}')">Supprimer</button>
       </div>
@@ -101,6 +102,36 @@ function renderGroupes() {
 }
 
 document.getElementById('btnAjouterGroupe').addEventListener('click', () => ouvrirModalGroupe());
+
+window.voirMembresGroupe = (groupeId) => {
+  const groupe = currentGroupes.find(g => g.id === groupeId);
+  const membresDuGroupe = currentMembres.filter(m => m.groupeId === groupeId);
+
+  const html = `
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-box">
+        <h3>${escapeHtml(groupe?.nom || '')} — ${membresDuGroupe.length} membre(s)</h3>
+        <div class="data-list">
+          ${membresDuGroupe.length === 0
+            ? '<div class="empty-state">Aucun membre dans ce groupe pour l\'instant.</div>'
+            : membresDuGroupe.map(m => `
+              <div class="data-row">
+                <div class="data-main">
+                  <div class="data-title">${escapeHtml(m.nomMaitre)} — ${escapeHtml(m.chien?.nom || '')}</div>
+                  <div class="data-sub">${m.gsm ? `<a href="tel:${escapeAttr(m.gsm)}">${escapeHtml(m.gsm)}</a>` : ''}</div>
+                </div>
+                <div class="data-actions">
+                  <button class="btn-sm" onclick="window.fermerModal(); window.editerMembre('${m.id}')">Fiche</button>
+                </div>
+              </div>`).join('')}
+        </div>
+        <div class="modal-actions">
+          <button class="btn-sm" onclick="window.fermerModal()">Fermer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+};
 
 document.getElementById('btnImportGroupes').addEventListener('click', () => ouvrirModalImportGroupes());
 
