@@ -97,6 +97,70 @@ function renderGroupes() {
 
 document.getElementById('btnAjouterGroupe').addEventListener('click', () => ouvrirModalGroupe());
 
+document.getElementById('btnImportGroupes').addEventListener('click', () => ouvrirModalImportGroupes());
+
+function ouvrirModalImportGroupes() {
+  const exemplePreRempli =
+    'Groupe 01;lundi;18:30;19:30;8\n' +
+    'Groupe 02;lundi;19:45;20:45;8\n' +
+    'Groupe 03;mardi;18:45;19:45;8\n' +
+    'Groupe 04;mercredi;18:30;19:30;8';
+
+  const html = `
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-box" style="max-width:560px;">
+        <h3>Import groupé de groupes</h3>
+        <p style="color:var(--slate); font-size:0.85rem; margin-bottom:12px;">
+          Une ligne par groupe, format : <strong>Nom;jour;heureDébut;heureFin;maxChiens</strong><br>
+          Jours en minuscules : lundi, mardi, mercredi, jeudi, vendredi, samedi.
+        </p>
+        <div class="field">
+          <textarea id="ig-texte" rows="8" style="resize:vertical; font-family:monospace; font-size:0.85rem;">${exemplePreRempli}</textarea>
+        </div>
+        <div id="ig-resultat" style="font-size:0.85rem; color:var(--slate);"></div>
+        <div class="modal-actions">
+          <button class="btn-sm" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" id="ig-save">Importer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+
+  document.getElementById('ig-save').addEventListener('click', async () => {
+    const lignes = document.getElementById('ig-texte').value.split('\n').map(l => l.trim()).filter(l => l);
+    const joursValides = ['lundi','mardi','mercredi','jeudi','vendredi','samedi'];
+    let succes = 0, erreurs = [];
+
+    for (const ligne of lignes) {
+      const parts = ligne.split(';').map(p => p.trim());
+      if (parts.length < 4) { erreurs.push(`Ligne ignorée (format incomplet) : "${ligne}"`); continue; }
+      const [nom, jour, heureDebut, heureFin, max] = parts;
+      if (!nom || !joursValides.includes(jour.toLowerCase()) || !heureDebut || !heureFin) {
+        erreurs.push(`Ligne ignorée (jour ou champ invalide) : "${ligne}"`);
+        continue;
+      }
+      try {
+        await addDoc(collection(db, 'groupes'), {
+          nom,
+          jour: jour.toLowerCase(),
+          heureDebut,
+          heureFin,
+          participantsMax: parseInt(max, 10) || 8
+        });
+        succes++;
+      } catch (e) {
+        erreurs.push(`Erreur pour "${nom}" : ${e.message}`);
+      }
+    }
+
+    document.getElementById('ig-resultat').innerHTML =
+      `<strong>${succes} groupe(s) importé(s).</strong>` +
+      (erreurs.length ? '<br>' + erreurs.map(e => escapeHtml(e)).join('<br>') : '');
+
+    chargerGroupes();
+  });
+}
+
 window.editerGroupe = (id) => {
   const g = currentGroupes.find(x => x.id === id);
   ouvrirModalGroupe(g);
@@ -200,6 +264,85 @@ function renderMembres() {
 }
 
 document.getElementById('btnAjouterMembre').addEventListener('click', () => ouvrirModalMembre());
+
+document.getElementById('btnImportMembres').addEventListener('click', () => ouvrirModalImportMembres());
+
+function ouvrirModalImportMembres() {
+  const exemplePreRempli =
+    'Jacqueline;jacqueline.h;dams123;Groupe 03\n' +
+    'Junior;junior.b;kalou123;Groupe 03\n' +
+    'Claire;claire.g;crush123;Groupe 03\n' +
+    'Frédéric;frederic.m;moka123;Groupe 03\n' +
+    'Johnny;johnny.d;freya123;Groupe 03\n' +
+    'Camille;camille.d;pizco123;Groupe 03\n' +
+    'Céline;celine.p;charly123;Groupe 03';
+
+  const html = `
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-box" style="max-width:560px;">
+        <h3>Import groupé de membres</h3>
+        <p style="color:var(--slate); font-size:0.85rem; margin-bottom:12px;">
+          Une ligne par membre, format : <strong>NomMaître;identifiant;motDePasse;NomDuGroupe</strong><br>
+          Le nom du groupe doit correspondre exactement à un groupe déjà créé (sinon le membre est créé sans groupe).
+          Le reste de la fiche (chien, abonnement...) pourra être complété ensuite via "Fiche".
+        </p>
+        <div class="field">
+          <textarea id="im-texte" rows="9" style="resize:vertical; font-family:monospace; font-size:0.85rem;">${exemplePreRempli}</textarea>
+        </div>
+        <div id="im-resultat" style="font-size:0.85rem; color:var(--slate); white-space:pre-line;"></div>
+        <div class="modal-actions">
+          <button class="btn-sm" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" id="im-save">Importer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+
+  document.getElementById('im-save').addEventListener('click', async () => {
+    const btn = document.getElementById('im-save');
+    btn.disabled = true;
+    const resultZone = document.getElementById('im-resultat');
+    const lignes = document.getElementById('im-texte').value.split('\n').map(l => l.trim()).filter(l => l);
+    let succes = 0, erreurs = [];
+
+    for (const ligne of lignes) {
+      const parts = ligne.split(';').map(p => p.trim());
+      if (parts.length < 3) { erreurs.push(`Ligne ignorée (format incomplet) : "${ligne}"`); continue; }
+      const [nomMaitre, identifiantBrut, mdp, nomGroupe] = parts;
+      if (!nomMaitre || !identifiantBrut || !mdp || mdp.length < 6) {
+        erreurs.push(`Ligne ignorée (identifiant/mot de passe invalide, 6 caractères min.) : "${ligne}"`);
+        continue;
+      }
+      const identifiant = identifiantBrut.charAt(0).toUpperCase() + identifiantBrut.slice(1);
+      const groupe = nomGroupe ? currentGroupes.find(g => g.nom.toLowerCase() === nomGroupe.toLowerCase()) : null;
+
+      resultZone.textContent = `Import en cours... (${succes + erreurs.length + 1}/${lignes.length})`;
+
+      const email = identifiantVersEmail(identifiant);
+      const secondaryApp = initializeApp(auth.app.options, 'import-' + Date.now() + '-' + Math.random());
+      const secondaryAuth = getAuthSecondary(secondaryApp);
+      try {
+        const cred = await createUserWithEmailAndPassword(secondaryAuth, email, mdp);
+        await setDoc(doc(db, 'membres', cred.user.uid), {
+          nomMaitre, identifiant, role: 'membre', archive: false,
+          gsm: '', dateAnniversaire: '',
+          chien: { nom: '', race: '', naissance: '', sexe: 'male' },
+          groupeId: groupe ? groupe.id : null,
+          coursRestants: 11, abonnementPaye: false, cotisationPayee: false,
+          dateInscription: serverTimestamp()
+        });
+        await signOutSecondary(secondaryAuth);
+        succes++;
+      } catch (e) {
+        erreurs.push(`"${nomMaitre}" (${identifiant}) : ${e.code === 'auth/email-already-in-use' ? 'identifiant déjà utilisé' : e.message}`);
+      }
+    }
+
+    resultZone.textContent = `${succes} membre(s) importé(s) avec succès.` + (erreurs.length ? '\n' + erreurs.join('\n') : '');
+    btn.disabled = false;
+    chargerMembres().then(() => chargerAnniversaires());
+  });
+}
 
 window.editerMembre = (id) => {
   const m = currentMembres.find(x => x.id === id);
