@@ -25,7 +25,7 @@ onAuthStateChanged(auth, async (user) => {
   }
   document.getElementById('adminNom').textContent = mDoc.data().nomMaitre || 'Katia';
   chargerGroupes();
-  chargerMembres().then(() => { chargerConversations(); chargerAnniversaires(); });
+  chargerMembres().then(() => { chargerConversations(); chargerAnniversaires(); chargerCotisationsARenouveler(); });
   chargerCeSoir();
   afficherMeteoDuJour();
   chargerTarifs();
@@ -254,6 +254,7 @@ function renderMembres() {
       <div class="data-main">
         <div class="data-title">${escapeHtml(m.nomMaitre)} — ${escapeHtml(m.chien?.nom || '')}</div>
         <div class="data-sub">${groupe ? escapeHtml(groupe.nom) : 'Sans groupe'} · ${badgeAbo} ${badgeCotis}</div>
+        <div class="data-sub">${m.gsm ? `<a href="tel:${escapeAttr(m.gsm)}">${escapeHtml(m.gsm)}</a>` : ''} ${m.email ? `· <a href="mailto:${escapeAttr(m.email)}">${escapeHtml(m.email)}</a>` : ''}</div>
       </div>
       <div class="data-actions">
         <button class="btn-sm" onclick="window.editerMembre('${m.id}')">Fiche</button>
@@ -340,7 +341,7 @@ function ouvrirModalImportMembres() {
 
     resultZone.textContent = `${succes} membre(s) importé(s) avec succès.` + (erreurs.length ? '\n' + erreurs.join('\n') : '');
     btn.disabled = false;
-    chargerMembres().then(() => chargerAnniversaires());
+    chargerMembres().then(() => { chargerAnniversaires(); chargerCotisationsARenouveler(); });
   });
 }
 
@@ -355,20 +356,36 @@ window.archiverMembre = async (id) => {
   chargerMembres();
 };
 
+function optionsMarqueVaccin(valeurActuelle) {
+  return ['', 'Eurican', 'Versican', 'Nobivac', 'Autres'].map(m =>
+    `<option value="${m}" ${valeurActuelle === m ? 'selected' : ''}>${m || '—'}</option>`
+  ).join('');
+}
+
 function ouvrirModalMembre(membre) {
   const isEdit = !!membre;
+  const v = membre?.vaccins || {};
+  const rc = membre?.assuranceRC || {};
   const html = `
     <div class="modal-overlay" id="modalOverlay">
-      <div class="modal-box">
+      <div class="modal-box" style="max-width:560px;">
         <h3>${isEdit ? 'Fiche membre' : 'Ajouter un membre'}</h3>
         ${!isEdit ? `
         <div class="form-grid">
           <div class="field"><label>Identifiant</label><input id="mm-identifiant" placeholder="ex: Sarah.m"></div>
           <div class="field"><label>Mot de passe initial</label><input id="mm-mdp" placeholder="min. 6 caractères"></div>
         </div>` : ''}
+
+        <h3 style="margin-top:18px;">Coordonnées</h3>
         <div class="field"><label>Nom du maître</label><input id="mm-nomMaitre" value="${isEdit ? escapeAttr(membre.nomMaitre) : ''}"></div>
-        <div class="field"><label>GSM</label><input id="mm-gsm" value="${isEdit ? escapeAttr(membre.gsm||'') : ''}" placeholder="ex: 0032 4XX XX XX XX"></div>
+        <div class="form-grid">
+          <div class="field"><label>GSM</label><input id="mm-gsm" value="${isEdit ? escapeAttr(membre.gsm||'') : ''}" placeholder="ex: 0032 4XX XX XX XX"></div>
+          <div class="field"><label>E-mail</label><input type="email" id="mm-email" value="${isEdit ? escapeAttr(membre.email||'') : ''}" placeholder="ex: nom@exemple.be"></div>
+        </div>
+        <div class="field"><label>Adresse postale</label><input id="mm-adresse" value="${isEdit ? escapeAttr(membre.adressePostale||'') : ''}" placeholder="rue, numéro, code postal, ville"></div>
         <div class="field"><label>Date d'anniversaire</label><input type="date" id="mm-anniversaire" value="${isEdit ? (membre.dateAnniversaire||'') : ''}"></div>
+
+        <h3 style="margin-top:18px;">Le chien</h3>
         <div class="form-grid">
           <div class="field"><label>Nom du chien</label><input id="mm-chienNom" value="${isEdit ? escapeAttr(membre.chien?.nom||'') : ''}"></div>
           <div class="field"><label>Race</label><input id="mm-chienRace" value="${isEdit ? escapeAttr(membre.chien?.race||'') : ''}"></div>
@@ -379,7 +396,34 @@ function ouvrirModalMembre(membre) {
               <option value="femelle" ${isEdit && membre.chien?.sexe==='femelle' ? 'selected':''}>Femelle</option>
             </select>
           </div>
+          <div class="field"><label>Castré / Stérilisée</label>
+            <select id="mm-chienSterilise">
+              <option value="non" ${isEdit && !membre.chien?.sterilise ? 'selected':''}>Non</option>
+              <option value="oui" ${isEdit && membre.chien?.sterilise ? 'selected':''}>Oui</option>
+            </select>
+          </div>
+          <div class="field"><label>Date (si oui)</label><input type="date" id="mm-chienDateSterilisation" value="${isEdit ? (membre.chien?.dateSterilisation||'') : ''}"></div>
         </div>
+
+        <h3 style="margin-top:18px;">Vaccins</h3>
+        <div class="form-grid">
+          <div class="field"><label>Leptospirose — marque</label><select id="mm-vaxLepto-marque">${optionsMarqueVaccin(v.leptospirose?.marque)}</select></div>
+          <div class="field"><label>Leptospirose — date</label><input type="date" id="mm-vaxLepto-date" value="${v.leptospirose?.date||''}"></div>
+          <div class="field"><label>Parvovirose — marque</label><select id="mm-vaxParvo-marque">${optionsMarqueVaccin(v.parvovirose?.marque)}</select></div>
+          <div class="field"><label>Parvovirose — date</label><input type="date" id="mm-vaxParvo-date" value="${v.parvovirose?.date||''}"></div>
+          <div class="field"><label>Toux du chenil — marque</label><select id="mm-vaxToux-marque">${optionsMarqueVaccin(v.touxChenils?.marque)}</select></div>
+          <div class="field"><label>Toux du chenil — date</label><input type="date" id="mm-vaxToux-date" value="${v.touxChenils?.date||''}"></div>
+          <div class="field"><label>Rage — date</label><input type="date" id="mm-vaxRage-date" value="${v.rage?.date||''}"></div>
+        </div>
+
+        <h3 style="margin-top:18px;">Assurance RC familiale</h3>
+        <div class="form-grid">
+          <div class="field"><label>Compagnie</label><input id="mm-rcCompagnie" value="${escapeAttr(rc.compagnie||'')}"></div>
+          <div class="field"><label>N° de police</label><input id="mm-rcNumero" value="${escapeAttr(rc.numeroPolice||'')}"></div>
+          <div class="field"><label>Échéance (mois/année)</label><input type="month" id="mm-rcEcheance" value="${rc.dateEcheance||''}"></div>
+        </div>
+
+        <h3 style="margin-top:18px;">Groupe &amp; abonnement</h3>
         <div class="field"><label>Groupe par défaut</label><select id="mm-groupe"></select></div>
         <div class="form-grid">
           <div class="field"><label>Cours restants (abonnement)</label><input type="number" id="mm-coursRestants" value="${isEdit ? (membre.coursRestants ?? 11) : 11}"></div>
@@ -389,13 +433,20 @@ function ouvrirModalMembre(membre) {
               <option value="non" ${isEdit && !membre.abonnementPaye ? 'selected':''}>Non</option>
             </select>
           </div>
-          <div class="field"><label>Cotisation annuelle payée</label>
+        </div>
+
+        <h3 style="margin-top:18px;">Cotisation annuelle du club</h3>
+        <div class="form-grid">
+          <div class="field"><label>Date d'échéance</label><input type="date" id="mm-cotisEcheance" value="${membre?.cotisationDateEcheance||''}"></div>
+          <div class="field"><label>Payée</label>
             <select id="mm-cotisPaye">
               <option value="oui" ${isEdit && membre.cotisationPayee ? 'selected':''}>Oui</option>
               <option value="non" ${isEdit && !membre.cotisationPayee ? 'selected':''}>Non</option>
             </select>
           </div>
         </div>
+        ${isEdit && membre.cotisationRenouvellement ? `<p style="font-size:0.85rem; color:var(--slate);">Réponse du membre au renouvellement : <strong>${membre.cotisationRenouvellement === 'oui' ? 'Oui, elle/il souhaite renouveler' : 'Non, elle/il ne souhaite pas renouveler'}</strong></p>` : ''}
+
         <div class="modal-actions">
           <button class="btn-sm" onclick="window.fermerModal()">Annuler</button>
           <button class="btn-sm primary" id="mm-save">Enregistrer</button>
@@ -410,24 +461,40 @@ function ouvrirModalMembre(membre) {
     const data = {
       nomMaitre: document.getElementById('mm-nomMaitre').value.trim(),
       gsm: document.getElementById('mm-gsm').value.trim(),
+      email: document.getElementById('mm-email').value.trim(),
+      adressePostale: document.getElementById('mm-adresse').value.trim(),
       dateAnniversaire: document.getElementById('mm-anniversaire').value,
       chien: {
         nom: document.getElementById('mm-chienNom').value.trim(),
         race: document.getElementById('mm-chienRace').value.trim(),
         naissance: document.getElementById('mm-chienNaissance').value,
-        sexe: document.getElementById('mm-chienSexe').value
+        sexe: document.getElementById('mm-chienSexe').value,
+        sterilise: document.getElementById('mm-chienSterilise').value === 'oui',
+        dateSterilisation: document.getElementById('mm-chienDateSterilisation').value
+      },
+      vaccins: {
+        leptospirose: { marque: document.getElementById('mm-vaxLepto-marque').value, date: document.getElementById('mm-vaxLepto-date').value },
+        parvovirose: { marque: document.getElementById('mm-vaxParvo-marque').value, date: document.getElementById('mm-vaxParvo-date').value },
+        touxChenils: { marque: document.getElementById('mm-vaxToux-marque').value, date: document.getElementById('mm-vaxToux-date').value },
+        rage: { date: document.getElementById('mm-vaxRage-date').value }
+      },
+      assuranceRC: {
+        compagnie: document.getElementById('mm-rcCompagnie').value.trim(),
+        numeroPolice: document.getElementById('mm-rcNumero').value.trim(),
+        dateEcheance: document.getElementById('mm-rcEcheance').value
       },
       groupeId: document.getElementById('mm-groupe').value || null,
       coursRestants: parseInt(document.getElementById('mm-coursRestants').value, 10) || 0,
       abonnementPaye: document.getElementById('mm-aboPaye').value === 'oui',
-      cotisationPayee: document.getElementById('mm-cotisPaye').value === 'oui'
+      cotisationPayee: document.getElementById('mm-cotisPaye').value === 'oui',
+      cotisationDateEcheance: document.getElementById('mm-cotisEcheance').value
     };
     if (!data.nomMaitre) { alert('Merci d\'indiquer le nom du maître.'); return; }
 
     if (isEdit) {
       await updateDoc(doc(db, 'membres', membre.id), data);
       window.fermerModal();
-      chargerMembres().then(() => chargerAnniversaires());
+      chargerMembres().then(() => { chargerAnniversaires(); chargerCotisationsARenouveler(); });
     } else {
       let identifiant = document.getElementById('mm-identifiant').value.trim();
       const mdp = document.getElementById('mm-mdp').value;
@@ -453,7 +520,7 @@ function ouvrirModalMembre(membre) {
         });
         await signOutSecondary(secondaryAuth);
         window.fermerModal();
-        chargerMembres().then(() => chargerAnniversaires());
+        chargerMembres().then(() => { chargerAnniversaires(); chargerCotisationsARenouveler(); });
       } catch (err) {
         alert("Impossible de créer ce membre : " + (err.code === 'auth/email-already-in-use' ? 'cet identifiant existe déjà.' : err.message));
       }
@@ -534,7 +601,7 @@ function escapeAttr(str) { return escapeHtml(str); }
 // ==========================================================================
 async function chargerTarifs() {
   const configDoc = await getDoc(doc(db, 'tarifs', 'config'));
-  const data = configDoc.exists() ? configDoc.data() : { abonnement: 80, coursUnite: 8, cotisation: 75, individuel: 85 };
+  const data = configDoc.exists() ? configDoc.data() : { abonnement: 80, coursUnite: 8, cotisation: 70, individuel: 85 };
   document.getElementById('tf-abonnement').value = data.abonnement;
   document.getElementById('tf-coursUnite').value = data.coursUnite;
   document.getElementById('tf-cotisation').value = data.cotisation;
@@ -1003,6 +1070,35 @@ async function chargerAnniversaires() {
       🎂 Anniversaire${proches.length > 1 ? 's' : ''} à venir : ${proches.map(m => {
         const parts = m.dateAnniversaire.split('-').map(Number);
         return `${escapeHtml(m.nomMaitre)} (${parts[2]}/${parts[1]})`;
+      }).join(', ')}
+    </div>`;
+}
+
+// ==========================================================================
+// COTISATIONS — rappel des échéances proches (30 jours) ou dépassées
+// ==========================================================================
+async function chargerCotisationsARenouveler() {
+  const zone = document.getElementById('cotisationsARenouveler');
+  if (!zone) return;
+  const aujourdhui = new Date(); aujourdhui.setHours(0,0,0,0);
+  const dans30Jours = new Date(aujourdhui); dans30Jours.setDate(aujourdhui.getDate() + 30);
+
+  const concernes = currentMembres.filter(m => {
+    if (!m.cotisationDateEcheance) return false;
+    const echeance = new Date(m.cotisationDateEcheance + 'T00:00:00');
+    return echeance <= dans30Jours;
+  });
+
+  if (concernes.length === 0) { zone.innerHTML = ''; return; }
+
+  zone.innerHTML = `
+    <div class="banner-alert">
+      💳 Cotisation${concernes.length > 1 ? 's' : ''} à renouveler bientôt : ${concernes.map(m => {
+        const echeance = new Date(m.cotisationDateEcheance + 'T00:00:00');
+        const enRetard = echeance < aujourdhui;
+        const reponse = m.cotisationRenouvellement === 'oui' ? ' (a dit oui — facture 70€ TTC possible)'
+          : m.cotisationRenouvellement === 'non' ? ' (a dit non)' : ' (pas encore répondu)';
+        return `${escapeHtml(m.nomMaitre)}${enRetard ? ' — échue' : ''}${reponse}`;
       }).join(', ')}
     </div>`;
 }

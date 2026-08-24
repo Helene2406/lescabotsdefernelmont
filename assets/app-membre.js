@@ -56,7 +56,40 @@ function afficherAccueil() {
     ? `<span class="badge badge-ok">Cotisation à jour</span>`
     : `<span class="badge badge-warn">Cotisation à régler</span>`;
   document.getElementById('badgesAbo').innerHTML = badgeAbo + ' ' + badgeCotis;
+  afficherRappelCotisation();
 }
+
+function afficherRappelCotisation() {
+  const zone = document.getElementById('zoneCotisation');
+  if (!membreData.cotisationDateEcheance) { zone.innerHTML = ''; return; }
+  const aujourdhui = new Date(); aujourdhui.setHours(0,0,0,0);
+  const dansUnMois = new Date(aujourdhui); dansUnMois.setMonth(aujourdhui.getMonth() + 1);
+  const echeance = new Date(membreData.cotisationDateEcheance + 'T00:00:00');
+
+  if (echeance > dansUnMois) { zone.innerHTML = ''; return; }
+
+  const dateLabel = echeance.toLocaleDateString('fr-BE', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  if (membreData.cotisationRenouvellement) {
+    zone.innerHTML = `<div class="banner-alert">Cotisation jusqu'au ${dateLabel} — vous avez indiqué : <strong>${membreData.cotisationRenouvellement === 'oui' ? 'je souhaite renouveler' : 'je ne souhaite pas renouveler'}</strong>. Katia s'en occupe.</div>`;
+    return;
+  }
+
+  zone.innerHTML = `
+    <div class="banner-alert">
+      Votre cotisation arrive à échéance le ${dateLabel}. Souhaitez-vous la renouveler ?
+      <div class="presence-btns">
+        <button class="btn-sm primary" onclick="window.repondreCotisation('oui')">Oui, je renouvelle</button>
+        <button class="btn-sm" onclick="window.repondreCotisation('non')">Non, pas cette année</button>
+      </div>
+    </div>`;
+}
+
+window.repondreCotisation = async (reponse) => {
+  await updateDoc(doc(db, 'membres', membreUid), { cotisationRenouvellement: reponse });
+  membreData.cotisationRenouvellement = reponse;
+  afficherRappelCotisation();
+};
 
 function afficherGroupe() {
   document.getElementById('zoneGroupe').innerHTML = `
@@ -161,7 +194,7 @@ function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 async function chargerTarifs() {
   const configDoc = await getDoc(doc(db, 'tarifs', 'config'));
   const wrap = document.getElementById('zoneTarifs');
-  const data = configDoc.exists() ? configDoc.data() : { abonnement: 80, coursUnite: 8, cotisation: 75, individuel: 85 };
+  const data = configDoc.exists() ? configDoc.data() : { abonnement: 80, coursUnite: 8, cotisation: 70, individuel: 85 };
 
   const lignesBase = [
     ['Abonnement (10 cours + 1 gratuit)', data.abonnement],
