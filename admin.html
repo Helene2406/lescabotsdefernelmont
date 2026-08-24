@@ -27,6 +27,11 @@
     <button class="tab-btn active" data-tab="cesoir">Ce soir</button>
     <button class="tab-btn" data-tab="groupes">Groupes</button>
     <button class="tab-btn" data-tab="membres">Membres</button>
+    <button class="tab-btn" data-tab="tarifs">Tarifs</button>
+    <button class="tab-btn" data-tab="rdv">RDV</button>
+    <button class="tab-btn" data-tab="messages" id="tabMessagesBtn">Messages</button>
+    <button class="tab-btn" data-tab="blog">Blog</button>
+    <button class="tab-btn" data-tab="videos">Vidéos</button>
   </div>
 
   <div id="panel-cesoir" class="tab-panel">
@@ -54,6 +59,67 @@
         <button class="btn-sm primary" id="btnAjouterMembre">+ Ajouter un membre</button>
       </div>
       <div class="data-list" id="listeMembres"><div class="empty-state">Chargement...</div></div>
+    </div>
+  </div>
+
+  <div id="panel-tarifs" class="tab-panel hidden">
+    <div class="app-panel">
+      <div class="section-heading"><h2>Tarifs (TTC, TVA 21% incluse)</h2></div>
+      <div class="form-grid" style="margin-bottom:18px;">
+        <div class="field"><label>Abonnement (10 cours + 1 gratuit)</label><input type="number" step="0.01" id="tf-abonnement"></div>
+        <div class="field"><label>Cours à l'unité</label><input type="number" step="0.01" id="tf-coursUnite"></div>
+        <div class="field"><label>Cotisation annuelle</label><input type="number" step="0.01" id="tf-cotisation"></div>
+        <div class="field"><label>Cours individuel (1h)</label><input type="number" step="0.01" id="tf-individuel"></div>
+      </div>
+      <button class="btn-sm primary" id="btnSauverTarifs">Enregistrer les tarifs</button>
+
+      <div class="section-heading" style="margin-top:28px;">
+        <h3>Tarifs supplémentaires</h3>
+        <button class="btn-sm" id="btnAjouterTarifExtra">+ Ajouter un tarif</button>
+      </div>
+      <div class="data-list" id="listeTarifsExtra"><div class="empty-state">Chargement...</div></div>
+    </div>
+  </div>
+
+  <div id="panel-rdv" class="tab-panel hidden">
+    <div class="app-panel">
+      <div class="section-heading">
+        <h2>Rendez-vous</h2>
+        <button class="btn-sm primary" id="btnAjouterRdv">+ Créer un RDV</button>
+      </div>
+      <div class="data-list" id="listeRdv"><div class="empty-state">Chargement...</div></div>
+    </div>
+  </div>
+
+  <div id="panel-messages" class="tab-panel hidden">
+    <div class="app-panel">
+      <div class="section-heading">
+        <h2>Messages</h2>
+        <button class="btn-sm primary" id="btnMessageGroupe">Écrire à un groupe / tous</button>
+      </div>
+      <div class="data-list" id="listeConversations"><div class="empty-state">Chargement...</div></div>
+    </div>
+  </div>
+
+  <div id="panel-blog" class="tab-panel hidden">
+    <div class="app-panel">
+      <div class="section-heading">
+        <h2>Blog — Infos canines</h2>
+        <button class="btn-sm primary" id="btnAjouterArticle">+ Nouvel article</button>
+      </div>
+      <p style="color:var(--slate); font-size:0.85rem; margin-bottom:14px;">Ces articles sont visibles publiquement sur le site, page "Infos canines".</p>
+      <div class="data-list" id="listeArticles"><div class="empty-state">Chargement...</div></div>
+    </div>
+  </div>
+
+  <div id="panel-videos" class="tab-panel hidden">
+    <div class="app-panel">
+      <div class="section-heading">
+        <h2>Vidéos d'apprentissage</h2>
+        <button class="btn-sm primary" id="btnAjouterVideo">+ Ajouter une vidéo</button>
+      </div>
+      <p style="color:var(--slate); font-size:0.85rem; margin-bottom:14px;">Visibles uniquement par les membres connectés.</p>
+      <div class="data-list" id="listeVideos"><div class="empty-state">Chargement...</div></div>
     </div>
   </div>
 

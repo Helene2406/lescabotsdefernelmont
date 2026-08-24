@@ -32,5 +32,43 @@ service cloud.firestore {
       allow read: if estConnecte();
       allow write: if estAdmin();
     }
+
+    match /tarifs/{id} {
+      allow read: if estConnecte();
+      allow write: if estAdmin();
+    }
+
+    match /rdv/{id} {
+      allow read: if estConnecte();
+      allow write: if estAdmin();
+    }
+
+    match /rdv_reponses/{id} {
+      allow read: if estConnecte();
+      allow create, update: if estConnecte();
+      allow delete: if estAdmin();
+    }
+
+    match /conversations/{uid} {
+      allow read, write: if estConnecte() && (request.auth.uid == uid || estAdmin());
+      match /messages/{msgId} {
+        allow read, create, update: if estConnecte() && (request.auth.uid == uid || estAdmin());
+      }
+    }
+
+    match /articles/{id} {
+      allow read: if true;
+      allow write: if estAdmin();
+    }
+
+    match /videos/{id} {
+      allow read: if estConnecte();
+      allow write: if estAdmin();
+      match /commentaires/{cid} {
+        allow read: if estConnecte();
+        allow create: if estConnecte();
+        allow delete: if estAdmin();
+      }
+    }
   }
 }

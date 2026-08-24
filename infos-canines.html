@@ -3,13 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Nous contacter — Les Cabots de Fernelmont | Club canin Andenne</title>
-<meta name="description" content="Contactez le club canin Les Cabots de Fernelmont à Andenne par téléphone ou par email pour toute question ou inscription.">
-<link rel="canonical" href="https://helene2406.github.io/lescabotsdefernelmont/contact.html">
+<title>Infos canines — Les Cabots de Fernelmont | Conseils et actualités</title>
+<meta name="description" content="Conseils, actualités et articles sur l'éducation canine par Les Cabots de Fernelmont, club canin à Andenne.">
+<link rel="canonical" href="https://helene2406.github.io/lescabotsdefernelmont/infos-canines.html">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="assets/app.css">
 </head>
 <body>
 
@@ -29,8 +30,8 @@
         <li><a href="club.html">Le Club</a></li>
         <li><a href="activites.html">Activités</a></li>
         <li><a href="katia.html">Katia</a></li>
-        <li><a href="infos-canines.html">Infos canines</a></li>
-        <li><a href="contact.html" class="active">Nous contacter</a></li>
+        <li><a href="infos-canines.html" class="active">Infos canines</a></li>
+        <li><a href="contact.html">Nous contacter</a></li>
         <li><a href="connexion.html">Connexion</a></li>
       </ul>
     </nav>
@@ -39,39 +40,16 @@
 
 <section class="page-hero">
   <div class="container">
-    <span class="eyebrow">Contact</span>
-    <h1>Nous contacter</h1>
-    <p class="lead">Une question sur les cours, les tarifs ou une inscription ? N'hésitez pas à nous appeler ou à nous écrire.</p>
+    <span class="eyebrow">Le blog du club</span>
+    <h1>Infos canines</h1>
+    <p class="lead">Conseils, actualités et bonnes pratiques pour prendre soin de votre compagnon.</p>
   </div>
 </section>
 
 <section>
   <div class="container">
-    <div class="two-col">
-      <div class="contact-card">
-        <div class="cc-side"><img src="assets/logo.png" alt="Logo Les Cabots de Fernelmont"></div>
-        <div class="cc-body">
-          <h3>Les Cabots de Fernelmont</h3>
-          <div class="cc-role">LES BEAUX CABOTS SRL</div>
-          <ul class="contact-list">
-            <li><span class="label">Tél.</span><a href="tel:+32494051796">0032 494 05 17 96</a></li>
-            <li><span class="label">Email</span><a href="mailto:cabotsdefernelmont@gmail.com">cabotsdefernelmont@gmail.com</a></li>
-            <li><span class="label">Adresse</span><span>Rue Grande 26, 4219 Wasseiges (Meeffe)</span></li>
-            <li><span class="label">TVA</span><span>BE 0729.593.814</span></li>
-          </ul>
-        </div>
-      </div>
-      <div>
-        <div class="info-block">
-          <h2>Nos cours</h2>
-          <p>Les séances collectives se déroulent à Andenne. Pour connaître les prochains horaires disponibles ou organiser une séance individuelle, le plus simple est de nous appeler ou de nous envoyer un email — Katia vous répondra directement.</p>
-        </div>
-        <div class="info-block">
-          <h2>Réseaux sociaux</h2>
-          <p>Retrouvez aussi le club et ses actualités sur notre page Facebook.</p>
-          <a class="btn btn-primary" href="https://www.facebook.com/cabotsdefernelmont/?locale=fr_FR" target="_blank" rel="noopener">Voir la page Facebook</a>
-        </div>
-      </div>
+    <div class="data-list" id="listeArticlesPublic" style="max-width:760px; margin:0 auto;">
+      <div class="empty-state">Chargement...</div>
     </div>
   </div>
 </section>
@@ -90,9 +68,8 @@
           <li><a href="club.html">Le Club</a></li>
           <li><a href="activites.html">Activités</a></li>
           <li><a href="katia.html">Katia</a></li>
-        <li><a href="infos-canines.html">Infos canines</a></li>
+          <li><a href="infos-canines.html">Infos canines</a></li>
           <li><a href="contact.html">Nous contacter</a></li>
-        <li><a href="connexion.html">Connexion</a></li>
         </ul>
       </div>
       <div>
@@ -118,6 +95,34 @@
     const isOpen = nav.classList.toggle('open');
     toggle.setAttribute('aria-expanded', isOpen);
   });
+</script>
+<script type="module">
+  import { db, collection, getDocs } from "./assets/firebase-config.js";
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  (async () => {
+    const snap = await getDocs(collection(db, 'articles'));
+    const articles = [];
+    snap.forEach(d => articles.push({ id: d.id, ...d.data() }));
+    articles.sort((a, b) => (b.datePublication || '').localeCompare(a.datePublication || ''));
+
+    const wrap = document.getElementById('listeArticlesPublic');
+    if (articles.length === 0) {
+      wrap.innerHTML = '<div class="empty-state">Aucun article publié pour l\'instant — revenez bientôt !</div>';
+      return;
+    }
+    wrap.innerHTML = articles.map(a => `
+      <div class="app-panel">
+        ${a.image ? `<img src="${escapeHtml(a.image)}" alt="${escapeHtml(a.titre)}" style="width:100%; max-height:320px; object-fit:cover; border-radius:6px; margin-bottom:16px;">` : ''}
+        <h2 style="font-size:1.3rem;">${escapeHtml(a.titre)}</h2>
+        <p style="color:var(--slate); font-size:0.82rem; margin-bottom:12px;">${a.datePublication || ''}</p>
+        <p style="white-space:pre-wrap;">${escapeHtml(a.contenu)}</p>
+      </div>`).join('');
+  })();
 </script>
 </body>
 </html>
