@@ -26,6 +26,7 @@ onAuthStateChanged(auth, async (user) => {
   document.getElementById('adminNom').textContent = mDoc.data().nomMaitre || 'Katia';
   await chargerGroupes();
   await chargerMembres();
+  await chargerServices();
   await traiterAbsencesAutomatiques();
   chargerConversations();
   chargerAnniversaires();
@@ -33,7 +34,6 @@ onAuthStateChanged(auth, async (user) => {
   chargerAbonnementsARenouveler(); chargerVaccinsARappeler();
   chargerCeSoir();
   afficherMeteoDuJour();
-  chargerTarifs();
   chargerRdv();
   chargerArticles();
   chargerVideosAdmin();
@@ -830,78 +830,133 @@ function escapeHtml(str) {
 function escapeAttr(str) { return escapeHtml(str); }
 
 // ==========================================================================
-// TARIFS
+// SERVICES (remplace l'ancien "Tarifs" — catégories libres, prix ou texte)
 // ==========================================================================
-async function chargerTarifs() {
-  const configDoc = await getDoc(doc(db, 'tarifs', 'config'));
-  const data = configDoc.exists() ? configDoc.data() : { abonnement: 70, coursUnite: 8, cotisation: 70, individuel: 85 };
-  document.getElementById('tf-abonnement').value = data.abonnement;
-  document.getElementById('tf-coursUnite').value = data.coursUnite;
-  document.getElementById('tf-cotisation').value = data.cotisation;
-  document.getElementById('tf-individuel').value = data.individuel;
+const SERVICES_PAR_DEFAUT = [
+  { categorie: 'Éducation canine', nom: 'Cours collectif', prix: 70, prixTexte: '', unite: 'les 11 cours (10 + 1 gratuit)', conditions: '', prixFutur: null, dateFutur: '' },
+  { categorie: 'Éducation canine', nom: 'Cours individuel', prix: 8, prixTexte: '', unite: 'par cours', conditions: '', prixFutur: null, dateFutur: '' },
+  { categorie: 'Éducation canine', nom: 'Cotisation annuelle', prix: 70, prixTexte: '', unite: 'par an', conditions: '', prixFutur: 75, dateFutur: '2027-01-01' },
+  { categorie: 'Éducation canine', nom: 'Séance de comportement individuelle', prix: 60, prixTexte: '', unite: 'par heure', conditions: '', prixFutur: null, dateFutur: '' },
+  { categorie: 'Pension canine', nom: 'Pension canine', prix: 22, prixTexte: '', unite: 'par jour', conditions: "Sous réserve d'acceptation par Katia. Le chien doit obligatoirement être castré ou stérilisé. Arrivée à partir de 14h, départ avant 12h.", prixFutur: null, dateFutur: '' },
+  { categorie: 'Toilettage', nom: 'Toilettage pendant la pension', prix: null, prixTexte: 'Sur devis', unite: '', conditions: '', prixFutur: null, dateFutur: '' },
+  { categorie: 'Toilettage', nom: 'Toilettage à la demande', prix: null, prixTexte: '40 à 60 €', unite: 'tarif sur devis', conditions: '', prixFutur: null, dateFutur: '' }
+];
 
-  const extraSnap = await getDocs(collection(db, 'tarifs_extra'));
-  const wrap = document.getElementById('listeTarifsExtra');
-  if (extraSnap.empty) {
-    wrap.innerHTML = '<div class="empty-state">Aucun tarif supplémentaire.</div>';
-  } else {
-    const lignes = [];
-    extraSnap.forEach(d => {
-      const t = d.data();
-      lignes.push(`
-      <div class="data-row">
-        <div class="data-main">
-          <div class="data-title">${escapeHtml(t.nom)}</div>
-          <div class="data-sub">${Number(t.prix).toFixed(2)} € TTC</div>
-        </div>
-        <div class="data-actions">
-          <button class="btn-sm danger" onclick="window.supprimerTarifExtra('${d.id}')">Supprimer</button>
-        </div>
-      </div>`);
-    });
-    wrap.innerHTML = lignes.join('');
-  }
+let currentServices = [];
+
+async function chargerServices() {
+  const snap = await getDocs(collection(db, 'services'));
+  currentServices = [];
+  snap.forEach(d => currentServices.push({ id: d.id, ...d.data() }));
+  renderServicesAdmin();
 }
 
-document.getElementById('btnSauverTarifs').addEventListener('click', async () => {
-  await setDoc(doc(db, 'tarifs', 'config'), {
-    abonnement: parseFloat(document.getElementById('tf-abonnement').value) || 0,
-    coursUnite: parseFloat(document.getElementById('tf-coursUnite').value) || 0,
-    cotisation: parseFloat(document.getElementById('tf-cotisation').value) || 0,
-    individuel: parseFloat(document.getElementById('tf-individuel').value) || 0
-  });
-  alert('Tarifs enregistrés.');
-});
+function libellePrix(s) {
+  if (s.prixTexte) return s.prixTexte;
+  if (typeof s.prix === 'number') return `${s.prix.toFixed(2)} €${s.unite ? ' — ' + s.unite : ''}`;
+  return '—';
+}
 
-document.getElementById('btnAjouterTarifExtra').addEventListener('click', () => {
+function renderServicesAdmin() {
+  const wrap = document.getElementById('listeServices');
+  if (currentServices.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucun service pour l\'instant. Clique sur "Initialiser les services par défaut" ou ajoute-les un par un.</div>';
+    return;
+  }
+  const categories = [...new Set(currentServices.map(s => s.categorie || 'Autres'))];
+  wrap.innerHTML = categories.map(cat => `
+    <h3 style="margin-top:18px;">${escapeHtml(cat)}</h3>
+    <div class="data-list">
+      ${currentServices.filter(s => (s.categorie || 'Autres') === cat).map(s => `
+        <div class="data-row">
+          <div class="data-main">
+            <div class="data-title">${escapeHtml(s.nom)}</div>
+            <div class="data-sub">${libellePrix(s)}${s.prixFutur ? ` <span class="badge badge-warn">${Number(s.prixFutur).toFixed(2)} € à partir du ${s.dateFutur}</span>` : ''}</div>
+            ${s.conditions ? `<div class="data-sub">${escapeHtml(s.conditions)}</div>` : ''}
+          </div>
+          <div class="data-actions">
+            <button class="btn-sm" onclick="window.editerService('${s.id}')">Modifier</button>
+            <button class="btn-sm danger" onclick="window.supprimerService('${s.id}')">Supprimer</button>
+          </div>
+        </div>`).join('')}
+    </div>`).join('');
+}
+
+document.getElementById('btnAjouterService').addEventListener('click', () => ouvrirModalService());
+
+window.editerService = (id) => {
+  const s = currentServices.find(x => x.id === id);
+  ouvrirModalService(s);
+};
+
+window.supprimerService = async (id) => {
+  if (!confirm('Supprimer ce service ?')) return;
+  await deleteDoc(doc(db, 'services', id));
+  chargerServices();
+};
+
+function ouvrirModalService(service) {
+  const isEdit = !!service;
   const html = `
     <div class="modal-overlay" id="modalOverlay">
       <div class="modal-box">
-        <h3>Ajouter un tarif</h3>
-        <div class="field"><label>Nom du tarif</label><input id="te-nom" placeholder="ex: Toilettage"></div>
-        <div class="field"><label>Prix TTC (€)</label><input type="number" step="0.01" id="te-prix"></div>
+        <h3>${isEdit ? 'Modifier le service' : 'Ajouter un service'}</h3>
+        <div class="form-grid">
+          <div class="field"><label>Catégorie</label><input id="sv-categorie" value="${isEdit ? escapeAttr(service.categorie||'') : ''}" placeholder="ex: Éducation canine, Pension canine, Toilettage" list="sv-categories-list"></div>
+          <datalist id="sv-categories-list">
+            ${[...new Set(currentServices.map(s => s.categorie))].map(c => `<option value="${escapeAttr(c)}">`).join('')}
+          </datalist>
+          <div class="field"><label>Nom du service</label><input id="sv-nom" value="${isEdit ? escapeAttr(service.nom||'') : ''}"></div>
+        </div>
+        <div class="form-grid">
+          <div class="field"><label>Prix TTC (€, laisser vide si "sur devis")</label><input type="number" step="0.01" id="sv-prix" value="${isEdit && service.prix != null ? service.prix : ''}"></div>
+          <div class="field"><label>Ou texte libre (ex: "40 à 60 €")</label><input id="sv-prixTexte" value="${isEdit ? escapeAttr(service.prixTexte||'') : ''}"></div>
+        </div>
+        <div class="field"><label>Unité / précision (ex: "par jour", "par heure")</label><input id="sv-unite" value="${isEdit ? escapeAttr(service.unite||'') : ''}"></div>
+        <div class="field"><label>Conditions particulières (optionnel)</label><textarea id="sv-conditions" rows="2" style="resize:vertical;">${isEdit ? escapeHtml(service.conditions||'') : ''}</textarea></div>
+        <div class="form-grid">
+          <div class="field"><label>Prix futur (optionnel)</label><input type="number" step="0.01" id="sv-prixFutur" value="${isEdit && service.prixFutur != null ? service.prixFutur : ''}"></div>
+          <div class="field"><label>À partir du</label><input type="date" id="sv-dateFutur" value="${isEdit ? (service.dateFutur||'') : ''}"></div>
+        </div>
         <div class="modal-actions">
           <button class="btn-sm" onclick="window.fermerModal()">Annuler</button>
-          <button class="btn-sm primary" id="te-save">Enregistrer</button>
+          <button class="btn-sm primary" id="sv-save">Enregistrer</button>
         </div>
       </div>
     </div>`;
   document.getElementById('modalZone').innerHTML = html;
-  document.getElementById('te-save').addEventListener('click', async () => {
-    const nom = document.getElementById('te-nom').value.trim();
-    const prix = parseFloat(document.getElementById('te-prix').value);
-    if (!nom || isNaN(prix)) { alert('Merci de remplir le nom et le prix.'); return; }
-    await addDoc(collection(db, 'tarifs_extra'), { nom, prix });
+  document.getElementById('sv-save').addEventListener('click', async () => {
+    const nom = document.getElementById('sv-nom').value.trim();
+    const categorie = document.getElementById('sv-categorie').value.trim();
+    if (!nom || !categorie) { alert('Merci d\'indiquer une catégorie et un nom.'); return; }
+    const prixVal = document.getElementById('sv-prix').value;
+    const prixFuturVal = document.getElementById('sv-prixFutur').value;
+    const data = {
+      categorie, nom,
+      prix: prixVal === '' ? null : parseFloat(prixVal),
+      prixTexte: document.getElementById('sv-prixTexte').value.trim(),
+      unite: document.getElementById('sv-unite').value.trim(),
+      conditions: document.getElementById('sv-conditions').value.trim(),
+      prixFutur: prixFuturVal === '' ? null : parseFloat(prixFuturVal),
+      dateFutur: document.getElementById('sv-dateFutur').value
+    };
+    if (isEdit) {
+      await updateDoc(doc(db, 'services', service.id), data);
+    } else {
+      await addDoc(collection(db, 'services'), data);
+    }
     window.fermerModal();
-    chargerTarifs();
+    chargerServices();
   });
-});
+}
 
-window.supprimerTarifExtra = async (id) => {
-  if (!confirm('Supprimer ce tarif ?')) return;
-  await deleteDoc(doc(db, 'tarifs_extra', id));
-  chargerTarifs();
-};
+document.getElementById('btnInitServices').addEventListener('click', async () => {
+  if (currentServices.length > 0 && !confirm('Des services existent déjà. Ajouter quand même les services par défaut (sans toucher aux existants) ?')) return;
+  for (const s of SERVICES_PAR_DEFAUT) {
+    await addDoc(collection(db, 'services'), s);
+  }
+  chargerServices();
+});
 
 // ==========================================================================
 // RDV
@@ -1346,8 +1401,8 @@ async function chargerAbonnementsARenouveler() {
   const concernes = currentMembres.filter(m => (m.coursRestants ?? 0) <= 2);
   if (concernes.length === 0) { zone.innerHTML = ''; return; }
 
-  const configDoc = await getDoc(doc(db, 'tarifs', 'config'));
-  const prixAbonnement = configDoc.exists() ? configDoc.data().abonnement : 70;
+  const serviceAbonnement = currentServices.find(s => s.nom === 'Cours collectif') || {};
+  const prixAbonnement = typeof serviceAbonnement.prix === 'number' ? serviceAbonnement.prix : 70;
 
   zone.innerHTML = `
     <div class="banner-alert">

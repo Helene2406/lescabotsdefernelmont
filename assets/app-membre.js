@@ -33,7 +33,7 @@ onAuthStateChanged(auth, async (user) => {
     document.getElementById('zoneGroupe').innerHTML = '<div class="empty-state">Vous n\'êtes rattaché à aucun groupe pour l\'instant. Contactez Katia.</div>';
   }
 
-  chargerTarifs();
+  chargerServicesMembre();
   chargerRdv();
   chargerChat();
   chargerVideosMembre();
@@ -253,28 +253,39 @@ function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 // ==========================================================================
 // TARIFS (lecture seule)
 // ==========================================================================
-async function chargerTarifs() {
-  const configDoc = await getDoc(doc(db, 'tarifs', 'config'));
-  const wrap = document.getElementById('zoneTarifs');
-  const data = configDoc.exists() ? configDoc.data() : { abonnement: 70, coursUnite: 8, cotisation: 70, individuel: 85 };
+function libellePrixMembre(s) {
+  if (s.prixTexte) return s.prixTexte;
+  if (typeof s.prix === 'number') return `${s.prix.toFixed(2)} €${s.unite ? ' — ' + s.unite : ''}`;
+  return '—';
+}
 
-  const lignesBase = [
-    ['Abonnement (10 cours + 1 gratuit)', data.abonnement],
-    ['Cours à l\'unité', data.coursUnite],
-    ['Cotisation annuelle', data.cotisation],
-    ['Cours individuel (1h)', data.individuel]
-  ];
+async function chargerServicesMembre() {
+  const wrap = document.getElementById('zoneServices');
+  const snap = await getDocs(collection(db, 'services'));
+  const services = [];
+  snap.forEach(d => services.push(d.data()));
 
-  const extraSnap = await getDocs(collection(db, 'tarifs_extra'));
-  const lignesExtra = [];
-  extraSnap.forEach(d => lignesExtra.push([d.data().nom, d.data().prix]));
+  if (services.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucun service publié pour l\'instant.</div>';
+    return;
+  }
 
-  const toutes = [...lignesBase, ...lignesExtra];
-  wrap.innerHTML = toutes.map(([nom, prix]) => `
-    <div class="data-row">
-      <div class="data-main"><div class="data-title">${escapeHtml(nom)}</div></div>
-      <div class="data-actions"><span class="badge badge-neutral">${Number(prix).toFixed(2)} € TTC</span></div>
-    </div>`).join('') + '<p style="color:var(--slate); font-size:0.8rem; margin-top:10px;">Tarifs TTC, TVA 21% incluse.</p>';
+  const categories = [...new Set(services.map(s => s.categorie || 'Autres'))];
+  wrap.innerHTML = categories.map(cat => `
+    <h3 style="margin-top:14px;">${escapeHtml(cat)}</h3>
+    <div class="data-list">
+      ${services.filter(s => (s.categorie || 'Autres') === cat).map(s => `
+        <div class="data-row">
+          <div class="data-main">
+            <div class="data-title">${escapeHtml(s.nom)}</div>
+            ${s.conditions ? `<div class="data-sub">${escapeHtml(s.conditions)}</div>` : ''}
+          </div>
+          <div class="data-actions">
+            <span class="badge badge-neutral">${libellePrixMembre(s)}</span>
+            ${s.prixFutur ? `<span class="badge badge-warn">${Number(s.prixFutur).toFixed(2)} € dès le ${s.dateFutur}</span>` : ''}
+          </div>
+        </div>`).join('')}
+    </div>`).join('') + '<p style="color:var(--slate); font-size:0.8rem; margin-top:10px;">Prix TTC, TVA 21% incluse.</p>';
 }
 
 // ==========================================================================
