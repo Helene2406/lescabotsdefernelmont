@@ -46,9 +46,13 @@ document.getElementById('chatInputMembre').addEventListener('keydown', (e) => {
 
 document.getElementById('logoutBtn').addEventListener('click', () => signOut(auth).then(() => window.location.href = 'connexion.html'));
 
+function nomsChiensActifs() {
+  return (membreData.chiens || []).filter(c => !c.archive).map(c => c.nom).filter(Boolean).join(', ');
+}
+
 function afficherAccueil() {
   document.getElementById('membreNom').textContent = membreData.nomMaitre || '';
-  document.getElementById('chienNom').textContent = membreData.chien?.nom || '';
+  document.getElementById('chienNom').textContent = nomsChiensActifs();
   const badgeAbo = membreData.abonnementPaye
     ? `<span class="badge badge-ok">${membreData.coursRestants ?? 0} cours restants</span>`
     : `<span class="badge badge-danger">Abonnement non payé</span>`;
@@ -59,6 +63,7 @@ function afficherAccueil() {
   afficherRappelAbonnement();
   afficherRappelCotisation();
   preremplirMonProfil();
+  afficherMesChiens();
 }
 
 function afficherRappelAbonnement() {
@@ -437,32 +442,12 @@ window.ajouterCommentaire = async (videoId) => {
 // MON PROFIL — le membre encode/modifie ses propres infos
 // ==========================================================================
 function preremplirMonProfil() {
-  const v = membreData.vaccins || {};
   const rc = membreData.assuranceRC || {};
-  const c = membreData.chien || {};
 
   document.getElementById('mp-gsm').value = membreData.gsm || '';
   document.getElementById('mp-email').value = membreData.email || '';
   document.getElementById('mp-adresse').value = membreData.adressePostale || '';
   document.getElementById('mp-anniversaire').value = membreData.dateAnniversaire || '';
-
-  document.getElementById('mp-chienNom').value = c.nom || '';
-  document.getElementById('mp-chienRace').value = c.race || '';
-  document.getElementById('mp-chienNaissance').value = c.naissance || '';
-  document.getElementById('mp-chienSexe').value = c.sexe || 'male';
-  document.getElementById('mp-chienSterilise').value = c.sterilise ? 'oui' : 'non';
-  document.getElementById('mp-chienDateSterilisation').value = c.dateSterilisation || '';
-  document.getElementById('mp-chienPuce').value = c.puce || '';
-  document.getElementById('mp-chienPasseport').value = c.passeport || '';
-  document.getElementById('mp-chienPedigree').value = c.pedigree ? 'oui' : 'non';
-
-  document.getElementById('mp-vaxLepto-marque').value = v.leptospirose?.marque || '';
-  document.getElementById('mp-vaxLepto-date').value = v.leptospirose?.date || '';
-  document.getElementById('mp-vaxParvo-marque').value = v.parvovirose?.marque || '';
-  document.getElementById('mp-vaxParvo-date').value = v.parvovirose?.date || '';
-  document.getElementById('mp-vaxToux-marque').value = v.touxChenils?.marque || '';
-  document.getElementById('mp-vaxToux-date').value = v.touxChenils?.date || '';
-  document.getElementById('mp-vaxRage-date').value = v.rage?.date || '';
 
   document.getElementById('mp-rcCompagnie').value = rc.compagnie || '';
   document.getElementById('mp-rcNumero').value = rc.numeroPolice || '';
@@ -480,24 +465,6 @@ document.getElementById('mp-enregistrer').addEventListener('click', async () => 
     email: document.getElementById('mp-email').value.trim(),
     adressePostale: document.getElementById('mp-adresse').value.trim(),
     dateAnniversaire: document.getElementById('mp-anniversaire').value,
-    chien: {
-      ...membreData.chien,
-      nom: document.getElementById('mp-chienNom').value.trim(),
-      race: document.getElementById('mp-chienRace').value.trim(),
-      naissance: document.getElementById('mp-chienNaissance').value,
-      sexe: document.getElementById('mp-chienSexe').value,
-      sterilise: document.getElementById('mp-chienSterilise').value === 'oui',
-      dateSterilisation: document.getElementById('mp-chienDateSterilisation').value,
-      puce: document.getElementById('mp-chienPuce').value.trim(),
-      passeport: document.getElementById('mp-chienPasseport').value.trim(),
-      pedigree: document.getElementById('mp-chienPedigree').value === 'oui'
-    },
-    vaccins: {
-      leptospirose: { marque: document.getElementById('mp-vaxLepto-marque').value, date: document.getElementById('mp-vaxLepto-date').value },
-      parvovirose: { marque: document.getElementById('mp-vaxParvo-marque').value, date: document.getElementById('mp-vaxParvo-date').value },
-      touxChenils: { marque: document.getElementById('mp-vaxToux-marque').value, date: document.getElementById('mp-vaxToux-date').value },
-      rage: { date: document.getElementById('mp-vaxRage-date').value }
-    },
     assuranceRC: {
       compagnie: document.getElementById('mp-rcCompagnie').value.trim(),
       numeroPolice: document.getElementById('mp-rcNumero').value.trim(),
@@ -509,10 +476,140 @@ document.getElementById('mp-enregistrer').addEventListener('click', async () => 
     await updateDoc(doc(db, 'membres', membreUid), data);
     membreData = { ...membreData, ...data };
     document.getElementById('membreNom').textContent = membreData.nomMaitre || '';
-    document.getElementById('chienNom').textContent = membreData.chien?.nom || '';
-    statut.textContent = 'Informations enregistrées ✓';
+    statut.textContent = 'Profil enregistré ✓';
   } catch (e) {
     statut.textContent = 'Erreur : ' + e.message;
   }
   btn.disabled = false;
 });
+
+// ==========================================================================
+// MES CHIENS — plusieurs chiens possibles, archivage individuel (ex: décès)
+// ==========================================================================
+function optionsMarqueVaccinMembre(valeurActuelle) {
+  return ['', 'Eurican', 'Versican', 'Nobivac', 'Autres'].map(m =>
+    `<option value="${m}" ${valeurActuelle === m ? 'selected' : ''}>${m || '—'}</option>`
+  ).join('');
+}
+
+function afficherMesChiens() {
+  const chiens = (membreData.chiens || []).filter(c => !c.archive);
+  const wrap = document.getElementById('mc-liste');
+  if (chiens.length === 0) {
+    wrap.innerHTML = '<p style="color:var(--slate); font-size:0.85rem;">Aucun chien enregistré pour l\'instant.</p>';
+    return;
+  }
+  wrap.innerHTML = chiens.map(c => `
+    <div class="dog-card">
+      <div class="dog-card-head">
+        <div>
+          <div class="dog-title">${escapeHtml(c.nom || 'Sans nom')} ${c.race ? '— ' + escapeHtml(c.race) : ''}</div>
+          <div class="dog-sub">${c.pedigree ? 'Pedigree · ' : ''}${c.puce ? 'Puce ' + escapeHtml(c.puce) : 'Puce non renseignée'}</div>
+        </div>
+        <div class="data-actions">
+          <button class="btn-sm" type="button" onclick="window.ouvrirFormChien('${c.id}')">Modifier</button>
+          <button class="btn-sm danger" type="button" onclick="window.archiverMonChien('${c.id}')">Archiver</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+document.getElementById('mc-ajouter').addEventListener('click', () => window.ouvrirFormChien(null));
+
+window.ouvrirFormChien = (chienId) => {
+  const chien = chienId ? (membreData.chiens || []).find(c => c.id === chienId) : null;
+  const v = chien?.vaccins || {};
+
+  const html = `
+    <div class="modal-overlay" id="modalOverlayChien">
+      <div class="modal-box" style="max-width:520px;">
+        <h3>${chien ? 'Modifier le chien' : 'Ajouter un chien'}</h3>
+        <div class="form-grid">
+          <div class="field"><label>Nom du chien</label><input id="fc-nom" value="${chien ? escapeHtml(chien.nom||'') : ''}"></div>
+          <div class="field"><label>Race</label><input id="fc-race" value="${chien ? escapeHtml(chien.race||'') : ''}"></div>
+          <div class="field"><label>Date de naissance</label><input type="date" id="fc-naissance" value="${chien ? (chien.naissance||'') : ''}"></div>
+          <div class="field"><label>Sexe</label>
+            <select id="fc-sexe">
+              <option value="male" ${chien?.sexe==='male' ? 'selected':''}>Mâle</option>
+              <option value="femelle" ${chien?.sexe==='femelle' ? 'selected':''}>Femelle</option>
+            </select>
+          </div>
+          <div class="field"><label>Castré / Stérilisée</label>
+            <select id="fc-sterilise">
+              <option value="non" ${!chien?.sterilise ? 'selected':''}>Non</option>
+              <option value="oui" ${chien?.sterilise ? 'selected':''}>Oui</option>
+            </select>
+          </div>
+          <div class="field"><label>Date (si oui)</label><input type="date" id="fc-dateSterilisation" value="${chien ? (chien.dateSterilisation||'') : ''}"></div>
+          <div class="field"><label>N° de puce</label><input id="fc-puce" value="${chien ? escapeHtml(chien.puce||'') : ''}"></div>
+          <div class="field"><label>N° de passeport</label><input id="fc-passeport" value="${chien ? escapeHtml(chien.passeport||'') : ''}"></div>
+          <div class="field"><label>Pedigree</label>
+            <select id="fc-pedigree">
+              <option value="non" ${!chien?.pedigree ? 'selected':''}>Non</option>
+              <option value="oui" ${chien?.pedigree ? 'selected':''}>Oui</option>
+            </select>
+          </div>
+        </div>
+
+        <h3 style="margin-top:16px;">Vaccins</h3>
+        <div class="form-grid">
+          <div class="field"><label>Leptospirose — marque</label><select id="fc-vaxLepto-marque">${optionsMarqueVaccinMembre(v.leptospirose?.marque)}</select></div>
+          <div class="field"><label>Leptospirose — date</label><input type="date" id="fc-vaxLepto-date" value="${v.leptospirose?.date||''}"></div>
+          <div class="field"><label>Parvovirose — marque</label><select id="fc-vaxParvo-marque">${optionsMarqueVaccinMembre(v.parvovirose?.marque)}</select></div>
+          <div class="field"><label>Parvovirose — date</label><input type="date" id="fc-vaxParvo-date" value="${v.parvovirose?.date||''}"></div>
+          <div class="field"><label>Toux du chenil — marque</label><select id="fc-vaxToux-marque">${optionsMarqueVaccinMembre(v.touxChenils?.marque)}</select></div>
+          <div class="field"><label>Toux du chenil — date</label><input type="date" id="fc-vaxToux-date" value="${v.touxChenils?.date||''}"></div>
+          <div class="field"><label>Rage — date</label><input type="date" id="fc-vaxRage-date" value="${v.rage?.date||''}"></div>
+        </div>
+
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" onclick="document.getElementById('modalOverlayChien').remove()">Annuler</button>
+          <button class="btn-sm primary" type="button" id="fc-save">Enregistrer</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+
+  document.getElementById('fc-save').addEventListener('click', async () => {
+    const nouveauChien = {
+      id: chien ? chien.id : 'chien-' + Date.now(),
+      nom: document.getElementById('fc-nom').value.trim(),
+      race: document.getElementById('fc-race').value.trim(),
+      naissance: document.getElementById('fc-naissance').value,
+      sexe: document.getElementById('fc-sexe').value,
+      sterilise: document.getElementById('fc-sterilise').value === 'oui',
+      dateSterilisation: document.getElementById('fc-dateSterilisation').value,
+      puce: document.getElementById('fc-puce').value.trim(),
+      passeport: document.getElementById('fc-passeport').value.trim(),
+      pedigree: document.getElementById('fc-pedigree').value === 'oui',
+      archive: false,
+      vaccins: {
+        leptospirose: { marque: document.getElementById('fc-vaxLepto-marque').value, date: document.getElementById('fc-vaxLepto-date').value },
+        parvovirose: { marque: document.getElementById('fc-vaxParvo-marque').value, date: document.getElementById('fc-vaxParvo-date').value },
+        touxChenils: { marque: document.getElementById('fc-vaxToux-marque').value, date: document.getElementById('fc-vaxToux-date').value },
+        rage: { date: document.getElementById('fc-vaxRage-date').value }
+      }
+    };
+    if (!nouveauChien.nom) { alert('Merci d\'indiquer le nom du chien.'); return; }
+
+    const chiensActuels = membreData.chiens || [];
+    const nouveauxChiens = chien
+      ? chiensActuels.map(c => c.id === chien.id ? nouveauChien : c)
+      : [...chiensActuels, nouveauChien];
+
+    await updateDoc(doc(db, 'membres', membreUid), { chiens: nouveauxChiens });
+    membreData.chiens = nouveauxChiens;
+    document.getElementById('modalOverlayChien').remove();
+    afficherMesChiens();
+    document.getElementById('chienNom').textContent = nomsChiensActifs();
+  });
+};
+
+window.archiverMonChien = async (chienId) => {
+  if (!confirm('Archiver ce chien ? (par ex. en cas de décès) Ses informations resteront conservées.')) return;
+  const nouveauxChiens = (membreData.chiens || []).map(c => c.id === chienId ? { ...c, archive: true } : c);
+  await updateDoc(doc(db, 'membres', membreUid), { chiens: nouveauxChiens });
+  membreData.chiens = nouveauxChiens;
+  afficherMesChiens();
+  document.getElementById('chienNom').textContent = nomsChiensActifs();
+};

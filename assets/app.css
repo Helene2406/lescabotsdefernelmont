@@ -399,3 +399,42 @@
   z-index: 5;
   user-select: none;
 }
+
+/* Sections repliables (accordéon) */
+.panel-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  margin: 0 0 0 0;
+}
+.panel-toggle h2 { margin-bottom: 0; }
+.panel-chevron {
+  font-size: 1.1rem;
+  color: var(--brass);
+  transition: transform 0.2s ease;
+  flex: none;
+  margin-left: 10px;
+}
+.panel-toggle.open .panel-chevron { transform: rotate(180deg); }
+.panel-body { margin-top: 16px; }
+.panel-body.collapsed { display: none; }
+
+/* Cartes chien (liste dans fiche membre / mon chien) */
+.dog-card {
+  background: var(--paper);
+  border: 1px solid #E3E7EB;
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 10px;
+}
+.dog-card .dog-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dog-card .dog-title { font-weight: 600; color: var(--navy-dark); }
+.dog-card .dog-sub { color: var(--slate); font-size: 0.82rem; margin-top: 2px; }

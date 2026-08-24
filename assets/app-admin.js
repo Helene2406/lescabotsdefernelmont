@@ -117,7 +117,7 @@ window.voirMembresGroupe = (groupeId) => {
             : membresDuGroupe.map(m => `
               <div class="data-row">
                 <div class="data-main">
-                  <div class="data-title">${escapeHtml(m.nomMaitre)} — ${escapeHtml(m.chien?.nom || '')}</div>
+                  <div class="data-title">${escapeHtml(m.nomMaitre)}${nomsChiensActifs(m) ? ' — ' + escapeHtml(nomsChiensActifs(m)) : ''}</div>
                   <div class="data-sub">${m.gsm ? `<a href="tel:${escapeAttr(m.gsm)}">${escapeHtml(m.gsm)}</a>` : ''}</div>
                 </div>
                 <div class="data-actions">
@@ -271,6 +271,11 @@ async function chargerMembres() {
   renderGroupes();
 }
 
+function nomsChiensActifs(membre) {
+  const actifs = (membre.chiens || []).filter(c => !c.archive);
+  return actifs.map(c => c.nom).filter(Boolean).join(', ');
+}
+
 function renderMembres() {
   const wrap = document.getElementById('listeMembres');
   if (currentMembres.length === 0) {
@@ -288,7 +293,7 @@ function renderMembres() {
     return `
     <div class="data-row">
       <div class="data-main">
-        <div class="data-title">${escapeHtml(m.nomMaitre)} — ${escapeHtml(m.chien?.nom || '')}</div>
+        <div class="data-title">${escapeHtml(m.nomMaitre)}${nomsChiensActifs(m) ? ' — ' + escapeHtml(nomsChiensActifs(m)) : ''}</div>
         <div class="data-sub">${groupe ? escapeHtml(groupe.nom) : 'Sans groupe'} · ${badgeAbo} ${badgeCotis}</div>
         <div class="data-sub">${m.gsm ? `<a href="tel:${escapeAttr(m.gsm)}">${escapeHtml(m.gsm)}</a>` : ''} ${m.email ? `· <a href="mailto:${escapeAttr(m.email)}">${escapeHtml(m.email)}</a>` : ''}</div>
         <div class="data-sub">Identifiant : <strong>${escapeHtml(m.identifiant || '—')}</strong>${m.motDePasseInitial ? ` · Mot de passe : <strong>${escapeHtml(m.motDePasseInitial)}</strong>` : ''}</div>
@@ -364,7 +369,7 @@ function ouvrirModalImportMembres() {
         await setDoc(doc(db, 'membres', cred.user.uid), {
           nomMaitre, identifiant, motDePasseInitial: mdp, role: 'membre', archive: false,
           gsm: '', dateAnniversaire: '',
-          chien: { nom: '', race: '', naissance: '', sexe: 'male' },
+          chiens: [],
           groupeId: groupe ? groupe.id : null,
           coursRestants: 11, abonnementPaye: false, cotisationPayee: false,
           dateInscription: serverTimestamp()
@@ -401,8 +406,8 @@ function optionsMarqueVaccin(valeurActuelle) {
 
 function ouvrirModalMembre(membre) {
   const isEdit = !!membre;
-  const v = membre?.vaccins || {};
   const rc = membre?.assuranceRC || {};
+  const chiens = (membre?.chiens || []).filter(c => !c.archive);
   const html = `
     <div class="modal-overlay" id="modalOverlay">
       <div class="modal-box" style="max-width:560px;">
@@ -426,51 +431,18 @@ function ouvrirModalMembre(membre) {
         <div class="field"><label>Adresse postale</label><input id="mm-adresse" value="${isEdit ? escapeAttr(membre.adressePostale||'') : ''}" placeholder="rue, numéro, code postal, ville"></div>
         <div class="field"><label>Date d'anniversaire</label><input type="date" id="mm-anniversaire" value="${isEdit ? (membre.dateAnniversaire||'') : ''}"></div>
 
-        <h3 style="margin-top:18px;">Le chien</h3>
-        <div class="form-grid">
-          <div class="field"><label>Nom du chien</label><input id="mm-chienNom" value="${isEdit ? escapeAttr(membre.chien?.nom||'') : ''}"></div>
-          <div class="field"><label>Race</label><input id="mm-chienRace" value="${isEdit ? escapeAttr(membre.chien?.race||'') : ''}"></div>
-          <div class="field"><label>Date de naissance</label><input type="date" id="mm-chienNaissance" value="${isEdit ? (membre.chien?.naissance||'') : ''}"></div>
-          <div class="field"><label>Sexe</label>
-            <select id="mm-chienSexe">
-              <option value="male" ${isEdit && membre.chien?.sexe==='male' ? 'selected':''}>Mâle</option>
-              <option value="femelle" ${isEdit && membre.chien?.sexe==='femelle' ? 'selected':''}>Femelle</option>
-            </select>
-          </div>
-          <div class="field"><label>Castré / Stérilisée</label>
-            <select id="mm-chienSterilise">
-              <option value="non" ${isEdit && !membre.chien?.sterilise ? 'selected':''}>Non</option>
-              <option value="oui" ${isEdit && membre.chien?.sterilise ? 'selected':''}>Oui</option>
-            </select>
-          </div>
-          <div class="field"><label>Date (si oui)</label><input type="date" id="mm-chienDateSterilisation" value="${isEdit ? (membre.chien?.dateSterilisation||'') : ''}"></div>
-          <div class="field"><label>N° de puce</label><input id="mm-chienPuce" value="${isEdit ? escapeAttr(membre.chien?.puce||'') : ''}"></div>
-          <div class="field"><label>N° de passeport</label><input id="mm-chienPasseport" value="${isEdit ? escapeAttr(membre.chien?.passeport||'') : ''}"></div>
-          <div class="field"><label>Pedigree</label>
-            <select id="mm-chienPedigree">
-              <option value="non" ${isEdit && !membre.chien?.pedigree ? 'selected':''}>Non</option>
-              <option value="oui" ${isEdit && membre.chien?.pedigree ? 'selected':''}>Oui</option>
-            </select>
-          </div>
-        </div>
-
-        <h3 style="margin-top:18px;">Vaccins</h3>
-        <div class="form-grid">
-          <div class="field"><label>Leptospirose — marque</label><select id="mm-vaxLepto-marque">${optionsMarqueVaccin(v.leptospirose?.marque)}</select></div>
-          <div class="field"><label>Leptospirose — date</label><input type="date" id="mm-vaxLepto-date" value="${v.leptospirose?.date||''}"></div>
-          <div class="field"><label>Parvovirose — marque</label><select id="mm-vaxParvo-marque">${optionsMarqueVaccin(v.parvovirose?.marque)}</select></div>
-          <div class="field"><label>Parvovirose — date</label><input type="date" id="mm-vaxParvo-date" value="${v.parvovirose?.date||''}"></div>
-          <div class="field"><label>Toux du chenil — marque</label><select id="mm-vaxToux-marque">${optionsMarqueVaccin(v.touxChenils?.marque)}</select></div>
-          <div class="field"><label>Toux du chenil — date</label><input type="date" id="mm-vaxToux-date" value="${v.touxChenils?.date||''}"></div>
-          <div class="field"><label>Rage — date</label><input type="date" id="mm-vaxRage-date" value="${v.rage?.date||''}"></div>
-        </div>
-
         <h3 style="margin-top:18px;">Assurance RC familiale</h3>
         <div class="form-grid">
           <div class="field"><label>Compagnie</label><input id="mm-rcCompagnie" value="${escapeAttr(rc.compagnie||'')}"></div>
           <div class="field"><label>N° de police</label><input id="mm-rcNumero" value="${escapeAttr(rc.numeroPolice||'')}"></div>
           <div class="field"><label>Échéance (mois/année)</label><input type="month" id="mm-rcEcheance" value="${rc.dateEcheance||''}"></div>
         </div>
+
+        <h3 style="margin-top:18px;">Chien(s)</h3>
+        <div id="mm-listeChiens">
+          ${isEdit ? renderListeChiensAdmin(membre) : '<p style="color:var(--slate); font-size:0.85rem;">Enregistre d\'abord le membre, tu pourras ajouter son/ses chien(s) juste après.</p>'}
+        </div>
+        ${isEdit ? `<button class="btn-sm" type="button" onclick="window.ouvrirModalChien('${membre.id}', null)">+ Ajouter un chien</button>` : ''}
 
         <h3 style="margin-top:18px;">Groupe &amp; abonnement</h3>
         <div class="field"><label>Groupe par défaut</label><select id="mm-groupe"></select></div>
@@ -517,23 +489,6 @@ function ouvrirModalMembre(membre) {
       email: document.getElementById('mm-email').value.trim(),
       adressePostale: document.getElementById('mm-adresse').value.trim(),
       dateAnniversaire: document.getElementById('mm-anniversaire').value,
-      chien: {
-        nom: document.getElementById('mm-chienNom').value.trim(),
-        race: document.getElementById('mm-chienRace').value.trim(),
-        naissance: document.getElementById('mm-chienNaissance').value,
-        sexe: document.getElementById('mm-chienSexe').value,
-        sterilise: document.getElementById('mm-chienSterilise').value === 'oui',
-        dateSterilisation: document.getElementById('mm-chienDateSterilisation').value,
-        puce: document.getElementById('mm-chienPuce').value.trim(),
-        passeport: document.getElementById('mm-chienPasseport').value.trim(),
-        pedigree: document.getElementById('mm-chienPedigree').value === 'oui'
-      },
-      vaccins: {
-        leptospirose: { marque: document.getElementById('mm-vaxLepto-marque').value, date: document.getElementById('mm-vaxLepto-date').value },
-        parvovirose: { marque: document.getElementById('mm-vaxParvo-marque').value, date: document.getElementById('mm-vaxParvo-date').value },
-        touxChenils: { marque: document.getElementById('mm-vaxToux-marque').value, date: document.getElementById('mm-vaxToux-date').value },
-        rage: { date: document.getElementById('mm-vaxRage-date').value }
-      },
       assuranceRC: {
         compagnie: document.getElementById('mm-rcCompagnie').value.trim(),
         numeroPolice: document.getElementById('mm-rcNumero').value.trim(),
@@ -572,6 +527,7 @@ function ouvrirModalMembre(membre) {
         const cred = await createUserWithEmailAndPassword(secondaryAuth, email, mdp);
         await setDoc(doc(db, 'membres', cred.user.uid), {
           ...data,
+          chiens: [],
           identifiant,
           motDePasseInitial: mdp,
           role: 'membre',
@@ -591,10 +547,126 @@ function ouvrirModalMembre(membre) {
 }
 
 // ==========================================================================
-// CE SOIR — cours du jour, météo, maintien / annulation
+// CHIENS (tableau chiens[] sur le membre — plusieurs chiens possibles,
+// avec archivage individuel, ex: décès puis nouveau chien)
 // ==========================================================================
-async function chargerCeSoir() {
-  const jourAujourdhui = JOURS[new Date().getDay()];
+function renderListeChiensAdmin(membre) {
+  const chiens = (membre.chiens || []).filter(c => !c.archive);
+  if (chiens.length === 0) return '<p style="color:var(--slate); font-size:0.85rem;">Aucun chien enregistré pour l\'instant.</p>';
+  return chiens.map(c => `
+    <div class="dog-card">
+      <div class="dog-card-head">
+        <div>
+          <div class="dog-title">${escapeHtml(c.nom || 'Sans nom')} ${c.race ? '— ' + escapeHtml(c.race) : ''}</div>
+          <div class="dog-sub">${c.pedigree ? 'Pedigree · ' : ''}${c.puce ? 'Puce ' + escapeHtml(c.puce) : 'Puce non renseignée'}</div>
+        </div>
+        <div class="data-actions">
+          <button class="btn-sm" type="button" onclick="window.ouvrirModalChien('${membre.id}', '${c.id}')">Modifier</button>
+          <button class="btn-sm danger" type="button" onclick="window.archiverChien('${membre.id}', '${c.id}')">Archiver</button>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+window.ouvrirModalChien = (membreId, chienId) => {
+  const membre = currentMembres.find(m => m.id === membreId);
+  const chien = chienId ? (membre.chiens || []).find(c => c.id === chienId) : null;
+  const v = chien?.vaccins || {};
+
+  const html = `
+    <div class="modal-overlay" id="modalOverlayChien">
+      <div class="modal-box" style="max-width:520px;">
+        <h3>${chien ? 'Modifier le chien' : 'Ajouter un chien'}</h3>
+        <div class="form-grid">
+          <div class="field"><label>Nom du chien</label><input id="mc-nom" value="${chien ? escapeAttr(chien.nom||'') : ''}"></div>
+          <div class="field"><label>Race</label><input id="mc-race" value="${chien ? escapeAttr(chien.race||'') : ''}"></div>
+          <div class="field"><label>Date de naissance</label><input type="date" id="mc-naissance" value="${chien ? (chien.naissance||'') : ''}"></div>
+          <div class="field"><label>Sexe</label>
+            <select id="mc-sexe">
+              <option value="male" ${chien?.sexe==='male' ? 'selected':''}>Mâle</option>
+              <option value="femelle" ${chien?.sexe==='femelle' ? 'selected':''}>Femelle</option>
+            </select>
+          </div>
+          <div class="field"><label>Castré / Stérilisée</label>
+            <select id="mc-sterilise">
+              <option value="non" ${!chien?.sterilise ? 'selected':''}>Non</option>
+              <option value="oui" ${chien?.sterilise ? 'selected':''}>Oui</option>
+            </select>
+          </div>
+          <div class="field"><label>Date (si oui)</label><input type="date" id="mc-dateSterilisation" value="${chien ? (chien.dateSterilisation||'') : ''}"></div>
+          <div class="field"><label>N° de puce</label><input id="mc-puce" value="${chien ? escapeAttr(chien.puce||'') : ''}"></div>
+          <div class="field"><label>N° de passeport</label><input id="mc-passeport" value="${chien ? escapeAttr(chien.passeport||'') : ''}"></div>
+          <div class="field"><label>Pedigree</label>
+            <select id="mc-pedigree">
+              <option value="non" ${!chien?.pedigree ? 'selected':''}>Non</option>
+              <option value="oui" ${chien?.pedigree ? 'selected':''}>Oui</option>
+            </select>
+          </div>
+        </div>
+
+        <h3 style="margin-top:16px;">Vaccins</h3>
+        <div class="form-grid">
+          <div class="field"><label>Leptospirose — marque</label><select id="mc-vaxLepto-marque">${optionsMarqueVaccin(v.leptospirose?.marque)}</select></div>
+          <div class="field"><label>Leptospirose — date</label><input type="date" id="mc-vaxLepto-date" value="${v.leptospirose?.date||''}"></div>
+          <div class="field"><label>Parvovirose — marque</label><select id="mc-vaxParvo-marque">${optionsMarqueVaccin(v.parvovirose?.marque)}</select></div>
+          <div class="field"><label>Parvovirose — date</label><input type="date" id="mc-vaxParvo-date" value="${v.parvovirose?.date||''}"></div>
+          <div class="field"><label>Toux du chenil — marque</label><select id="mc-vaxToux-marque">${optionsMarqueVaccin(v.touxChenils?.marque)}</select></div>
+          <div class="field"><label>Toux du chenil — date</label><input type="date" id="mc-vaxToux-date" value="${v.touxChenils?.date||''}"></div>
+          <div class="field"><label>Rage — date</label><input type="date" id="mc-vaxRage-date" value="${v.rage?.date||''}"></div>
+        </div>
+
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" onclick="document.getElementById('modalOverlayChien').remove()">Annuler</button>
+          <button class="btn-sm primary" type="button" id="mc-save">Enregistrer</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+
+  document.getElementById('mc-save').addEventListener('click', async () => {
+    const nouveauChien = {
+      id: chien ? chien.id : 'chien-' + Date.now(),
+      nom: document.getElementById('mc-nom').value.trim(),
+      race: document.getElementById('mc-race').value.trim(),
+      naissance: document.getElementById('mc-naissance').value,
+      sexe: document.getElementById('mc-sexe').value,
+      sterilise: document.getElementById('mc-sterilise').value === 'oui',
+      dateSterilisation: document.getElementById('mc-dateSterilisation').value,
+      puce: document.getElementById('mc-puce').value.trim(),
+      passeport: document.getElementById('mc-passeport').value.trim(),
+      pedigree: document.getElementById('mc-pedigree').value === 'oui',
+      archive: false,
+      vaccins: {
+        leptospirose: { marque: document.getElementById('mc-vaxLepto-marque').value, date: document.getElementById('mc-vaxLepto-date').value },
+        parvovirose: { marque: document.getElementById('mc-vaxParvo-marque').value, date: document.getElementById('mc-vaxParvo-date').value },
+        touxChenils: { marque: document.getElementById('mc-vaxToux-marque').value, date: document.getElementById('mc-vaxToux-date').value },
+        rage: { date: document.getElementById('mc-vaxRage-date').value }
+      }
+    };
+    if (!nouveauChien.nom) { alert('Merci d\'indiquer le nom du chien.'); return; }
+
+    const chiensActuels = membre.chiens || [];
+    const nouveauxChiens = chien
+      ? chiensActuels.map(c => c.id === chien.id ? nouveauChien : c)
+      : [...chiensActuels, nouveauChien];
+
+    await updateDoc(doc(db, 'membres', membreId), { chiens: nouveauxChiens });
+    membre.chiens = nouveauxChiens;
+    document.getElementById('modalOverlayChien').remove();
+    ouvrirModalMembre(membre);
+  });
+};
+
+window.archiverChien = async (membreId, chienId) => {
+  if (!confirm('Archiver ce chien ? (par ex. en cas de décès) Ses données seront conservées mais il n\'apparaîtra plus comme actif.')) return;
+  const membre = currentMembres.find(m => m.id === membreId);
+  const nouveauxChiens = (membre.chiens || []).map(c => c.id === chienId ? { ...c, archive: true } : c);
+  await updateDoc(doc(db, 'membres', membreId), { chiens: nouveauxChiens });
+  membre.chiens = nouveauxChiens;
+  ouvrirModalMembre(membre);
+};
+
+
   const dateISO = new Date().toISOString().slice(0, 10);
   const wrap = document.getElementById('listeCeSoir');
 
