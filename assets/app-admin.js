@@ -26,6 +26,7 @@ onAuthStateChanged(auth, async (user) => {
   document.getElementById('adminNom').textContent = mDoc.data().nomMaitre || 'Katia';
   await chargerGroupes();
   await chargerMembres();
+  await traiterAbsencesAutomatiques();
   chargerConversations();
   chargerAnniversaires();
   chargerCotisationsARenouveler();
@@ -259,6 +260,7 @@ function renderMembres() {
         <div class="data-title">${escapeHtml(m.nomMaitre)} — ${escapeHtml(m.chien?.nom || '')}</div>
         <div class="data-sub">${groupe ? escapeHtml(groupe.nom) : 'Sans groupe'} · ${badgeAbo} ${badgeCotis}</div>
         <div class="data-sub">${m.gsm ? `<a href="tel:${escapeAttr(m.gsm)}">${escapeHtml(m.gsm)}</a>` : ''} ${m.email ? `· <a href="mailto:${escapeAttr(m.email)}">${escapeHtml(m.email)}</a>` : ''}</div>
+        <div class="data-sub">Identifiant : <strong>${escapeHtml(m.identifiant || '—')}</strong>${m.motDePasseInitial ? ` · Mot de passe : <strong>${escapeHtml(m.motDePasseInitial)}</strong>` : ''}</div>
       </div>
       <div class="data-actions">
         <button class="btn-sm" onclick="window.editerMembre('${m.id}')">Fiche</button>
@@ -329,7 +331,7 @@ function ouvrirModalImportMembres() {
       try {
         const cred = await createUserWithEmailAndPassword(secondaryAuth, email, mdp);
         await setDoc(doc(db, 'membres', cred.user.uid), {
-          nomMaitre, identifiant, role: 'membre', archive: false,
+          nomMaitre, identifiant, motDePasseInitial: mdp, role: 'membre', archive: false,
           gsm: '', dateAnniversaire: '',
           chien: { nom: '', race: '', naissance: '', sexe: 'male' },
           groupeId: groupe ? groupe.id : null,
@@ -345,7 +347,7 @@ function ouvrirModalImportMembres() {
 
     resultZone.textContent = `${succes} membre(s) importé(s) avec succès.` + (erreurs.length ? '\n' + erreurs.join('\n') : '');
     btn.disabled = false;
-    chargerMembres().then(() => { chargerAnniversaires(); chargerCotisationsARenouveler(); chargerAbonnementsARenouveler(); });
+    chargerMembres().then(() => { chargerConversations(); chargerAnniversaires(); chargerCotisationsARenouveler(); chargerAbonnementsARenouveler(); });
   });
 }
 
@@ -357,7 +359,7 @@ window.editerMembre = (id) => {
 window.archiverMembre = async (id) => {
   if (!confirm('Archiver ce membre ? Il ne pourra plus se connecter mais ses données seront conservées.')) return;
   await updateDoc(doc(db, 'membres', id), { archive: true });
-  chargerMembres();
+  chargerMembres().then(() => { chargerConversations(); chargerAnniversaires(); chargerCotisationsARenouveler(); chargerAbonnementsARenouveler(); });
 };
 
 function optionsMarqueVaccin(valeurActuelle) {
@@ -378,7 +380,11 @@ function ouvrirModalMembre(membre) {
         <div class="form-grid">
           <div class="field"><label>Identifiant</label><input id="mm-identifiant" placeholder="ex: Sarah.m"></div>
           <div class="field"><label>Mot de passe initial</label><input id="mm-mdp" placeholder="min. 6 caractères"></div>
-        </div>` : ''}
+        </div>` : `
+        <div class="form-grid">
+          <div class="field"><label>Identifiant</label><input value="${escapeAttr(membre.identifiant||'')}" disabled style="background:var(--paper-warm);"></div>
+          <div class="field"><label>Mot de passe (pour référence)</label><input id="mm-mdpRef" value="${escapeAttr(membre.motDePasseInitial||'')}" placeholder="renseigne-le si tu le connais"></div>
+        </div>`}
 
         <h3 style="margin-top:18px;">Coordonnées</h3>
         <div class="field"><label>Nom du maître</label><input id="mm-nomMaitre" value="${isEdit ? escapeAttr(membre.nomMaitre) : ''}"></div>
@@ -508,12 +514,15 @@ function ouvrirModalMembre(membre) {
       cotisationPayee: document.getElementById('mm-cotisPaye').value === 'oui',
       cotisationDateEcheance: document.getElementById('mm-cotisEcheance').value
     };
+    if (isEdit) {
+      data.motDePasseInitial = document.getElementById('mm-mdpRef').value.trim();
+    }
     if (!data.nomMaitre) { alert('Merci d\'indiquer le nom du maître.'); btnSave.disabled = false; btnSave.textContent = 'Enregistrer'; return; }
 
     if (isEdit) {
       await updateDoc(doc(db, 'membres', membre.id), data);
       window.fermerModal();
-      chargerMembres().then(() => { chargerAnniversaires(); chargerCotisationsARenouveler(); chargerAbonnementsARenouveler(); });
+      chargerMembres().then(() => { chargerConversations(); chargerAnniversaires(); chargerCotisationsARenouveler(); chargerAbonnementsARenouveler(); });
     } else {
       let identifiant = document.getElementById('mm-identifiant').value.trim();
       const mdp = document.getElementById('mm-mdp').value;
@@ -533,13 +542,14 @@ function ouvrirModalMembre(membre) {
         await setDoc(doc(db, 'membres', cred.user.uid), {
           ...data,
           identifiant,
+          motDePasseInitial: mdp,
           role: 'membre',
           archive: false,
           dateInscription: serverTimestamp()
         });
         await signOutSecondary(secondaryAuth);
         window.fermerModal();
-        chargerMembres().then(() => { chargerAnniversaires(); chargerCotisationsARenouveler(); chargerAbonnementsARenouveler(); });
+        chargerMembres().then(() => { chargerConversations(); chargerAnniversaires(); chargerCotisationsARenouveler(); chargerAbonnementsARenouveler(); });
       } catch (err) {
         alert("Impossible de créer ce membre : " + (err.code === 'auth/email-already-in-use' ? 'cet identifiant existe déjà.' : err.message));
         btnSave.disabled = false;
@@ -567,10 +577,23 @@ async function chargerCeSoir() {
   const annulations = {};
   annulSnap.forEach(d => { annulations[d.id] = d.data(); });
 
+  const presSnap = await getDocs(collection(db, 'presences'));
+  const presencesParGroupe = {};
+  presSnap.forEach(d => {
+    const p = d.data();
+    if (p.dateISO !== dateISO) return;
+    if (!presencesParGroupe[p.groupeId]) presencesParGroupe[p.groupeId] = { present: 0, absent: 0 };
+    presencesParGroupe[p.groupeId][p.statut === 'present' ? 'present' : 'absent']++;
+  });
+
+  const MIN_PARTICIPANTS = 4;
+
   const lignes = await Promise.all(groupesDuJour.map(async (g) => {
     const cle = `${g.id}_${dateISO}`;
     const annule = annulations[cle];
     const nbMembres = currentMembres.filter(m => m.groupeId === g.id).length;
+    const presencesJour = presencesParGroupe[g.id] || { present: 0, absent: 0 };
+    const pasAssez = !annule && presencesJour.present < MIN_PARTICIPANTS;
     const m = await meteoPour(dateISO, g.heureDebut);
     const alerte = alerteMeteo(m);
 
@@ -579,11 +602,12 @@ async function chargerCeSoir() {
       <div class="data-main">
         <div class="data-title">${escapeHtml(g.nom)} — ${g.heureDebut}–${g.heureFin}</div>
         <div class="data-sub">
-          ${nbMembres} chiens inscrits
+          ${nbMembres} chiens inscrits · <strong>${presencesJour.present}</strong> confirmé(s) présent(s)${presencesJour.absent ? `, ${presencesJour.absent} absent(s)` : ''}
           ${annule ? `<span class="badge badge-danger">Annulé — ${escapeHtml(annule.motif)}</span>` : `<span class="badge badge-ok">Maintenu</span>`}
           ${m ? `<span class="badge badge-neutral">${iconeCode(m.code)} ${m.temperature}°C · pluie ${m.pluie}%</span>` : ''}
         </div>
         ${alerte && !annule ? `<div class="banner-alert" style="margin-top:8px; padding:8px 12px; ${alerte.niveau==='danger' ? 'background:#FBEAEA;border-color:#E3B4B4;color:#8A2E2E;' : ''}">⚠️ ${alerte.texte} — pense à vérifier si le cours doit être maintenu.</div>` : ''}
+        ${pasAssez ? `<div class="banner-alert" style="margin-top:8px; padding:8px 12px; background:#FBEAEA;border-color:#E3B4B4;color:#8A2E2E;">⚠️ Seulement ${presencesJour.present} confirmation(s) sur les ${MIN_PARTICIPANTS} minimum requises — le cours devra être annulé faute de participants si ça n'évolue pas.</div>` : ''}
       </div>
       <div class="data-actions">
         ${annule
@@ -1148,3 +1172,29 @@ async function chargerAbonnementsARenouveler() {
     </div>`;
 }
 
+
+// ==========================================================================
+// ABSENCES AUTOMATIQUES — traite les réponses manquantes après le délai de
+// 24h (créées côté membre) : décompte le cours de l'abonnement, une seule
+// fois par absence (seul l'admin a le droit d'écriture sur coursRestants).
+// ==========================================================================
+async function traiterAbsencesAutomatiques() {
+  const presSnap = await getDocs(query(collection(db, 'presences'), where('statut', '==', 'absent-auto')));
+  const aTraiter = [];
+  presSnap.forEach(d => {
+    const p = d.data();
+    if (!p.compteAbonnement) aTraiter.push({ id: d.id, ...p });
+  });
+  if (aTraiter.length === 0) return;
+
+  for (const p of aTraiter) {
+    const membre = currentMembres.find(m => m.id === p.uid);
+    if (membre) {
+      const nouveauSolde = Math.max(0, (membre.coursRestants ?? 0) - 1);
+      await updateDoc(doc(db, 'membres', p.uid), { coursRestants: nouveauSolde });
+      membre.coursRestants = nouveauSolde;
+    }
+    await updateDoc(doc(db, 'presences', p.id), { compteAbonnement: true });
+  }
+  renderMembres();
+}

@@ -181,10 +181,24 @@ async function afficherProchainsCours() {
     }
 
     let statutHtml;
+    const heureCours = new Date(`${dateISO}T${groupeData.heureDebut}:00`);
+    const delaiDepasse = new Date() >= new Date(heureCours.getTime() - 24 * 60 * 60 * 1000);
+
     if (presence) {
-      statutHtml = presence.statut === 'present'
-        ? '<span class="badge badge-ok">Présence confirmée</span>'
-        : '<span class="badge badge-neutral">Absence signalée</span>';
+      if (presence.statut === 'present') {
+        statutHtml = '<span class="badge badge-ok">Présence confirmée</span>';
+      } else if (presence.statut === 'absent-auto') {
+        statutHtml = '<span class="badge badge-warn">Pas de réponse dans les délais — comptabilisé(e) absent(e), ce cours compte dans votre abonnement.</span>';
+      } else {
+        statutHtml = '<span class="badge badge-neutral">Absence signalée</span>';
+      }
+    } else if (delaiDepasse) {
+      // Le délai de 24h avant le cours est dépassé sans réponse : absence automatique.
+      await setDoc(doc(db, 'presences', clePres), {
+        groupeId: groupeData.id, uid: membreUid, dateISO, statut: 'absent-auto',
+        repondu: new Date().toISOString(), compteAbonnement: false
+      });
+      statutHtml = '<span class="badge badge-warn">Pas de réponse dans les délais — comptabilisé(e) absent(e), ce cours compte dans votre abonnement.</span>';
     } else if ((membreData.coursRestants ?? 0) <= 0) {
       statutHtml = '<span class="badge badge-danger">Abonnement épuisé — contactez Katia</span>';
     } else {
@@ -192,7 +206,8 @@ async function afficherProchainsCours() {
         <div class="presence-btns">
           <button class="btn-sm primary" onclick="window.repondrePresence('${dateISO}','present')">Je serai présent</button>
           <button class="btn-sm" onclick="window.repondrePresence('${dateISO}','absent')">Je serai absent</button>
-        </div>`;
+        </div>
+        <p style="font-size:0.76rem; color:var(--slate-light); margin-top:4px;">À confirmer au plus tard 24h avant le cours.</p>`;
     }
 
     return `
