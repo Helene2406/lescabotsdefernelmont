@@ -82,5 +82,10 @@ service cloud.firestore {
       allow read: if estConnecte() && (resource.data.membreId == request.auth.uid || estAdmin());
       allow create, update, delete: if estAdmin();
     }
+
+    match /parametres/{id} {
+      allow read: if estConnecte();
+      allow write: if estAdmin();
+    }
   }
 }

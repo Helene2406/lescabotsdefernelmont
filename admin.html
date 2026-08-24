@@ -41,7 +41,7 @@
 
   <div id="panel-cesoir" class="tab-panel">
     <div class="app-panel">
-      <div class="section-heading"><h2>Cours de ce soir</h2></div>
+      <div class="section-heading"><h2>Cours de la semaine</h2></div>
       <div id="meteoDuJour" style="margin-bottom:16px;"></div>
       <div id="anniversairesDuJour" style="margin-bottom:16px;"></div>
       <div id="cotisationsARenouveler" style="margin-bottom:16px;"></div>
@@ -89,6 +89,13 @@
   </div>
 
   <div id="panel-rdv" class="tab-panel hidden">
+    <div class="app-panel">
+      <h3>Compte bancaire du club (pour les virements RDV)</h3>
+      <div class="form-grid">
+        <div class="field"><label>IBAN</label><input id="rdv-iban" placeholder="ex: BE00 0000 0000 0000"></div>
+      </div>
+      <button class="btn-sm" id="btnSauverIban">Enregistrer</button>
+    </div>
     <div class="app-panel">
       <div class="section-heading">
         <h2>Rendez-vous</h2>
