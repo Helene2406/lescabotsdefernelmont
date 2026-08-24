@@ -77,5 +77,10 @@ service cloud.firestore {
         allow delete: if estAdmin();
       }
     }
+
+    match /paiements/{id} {
+      allow read: if estConnecte() && (resource.data.membreId == request.auth.uid || estAdmin());
+      allow create, update, delete: if estAdmin();
+    }
   }
 }
