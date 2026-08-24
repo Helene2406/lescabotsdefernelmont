@@ -16,12 +16,12 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyCrn4MGvxOUl2b3s5U2zlIBoQhQYgiEgQE",
-  authDomain: "cabots-de-fernelmont.firebaseapp.com",
-  projectId: "cabots-de-fernelmont",
-  storageBucket: "cabots-de-fernelmont.firebasestorage.app",
-  messagingSenderId: "680710286763",
-  appId: "1:680710286763:web:d29e4044df967e51be36ee"
+  apiKey: "AIzaSyC29dcTbC4PZ_zc5tF6fovc0s_3BZeupXU",
+  authDomain: "cabots-de-fernelmont-901ee.firebaseapp.com",
+  projectId: "cabots-de-fernelmont-901ee",
+  storageBucket: "cabots-de-fernelmont-901ee.firebasestorage.app",
+  messagingSenderId: "183891864365",
+  appId: "1:183891864365:web:7d08f8c12abf918f5341a4"
 };
 
 const app = initializeApp(firebaseConfig);
