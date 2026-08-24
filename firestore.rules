@@ -13,7 +13,7 @@ service cloud.firestore {
     function champsAutorisesMembre() {
       return request.resource.data.diff(resource.data).affectedKeys()
         .hasOnly(['nomMaitre','gsm','email','adressePostale','dateAnniversaire',
-                  'chien','vaccins','assuranceRC',
+                  'chiens','assuranceRC',
                   'cotisationRenouvellement','abonnementRenouvellement']);
     }
 
