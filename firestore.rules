@@ -87,5 +87,16 @@ service cloud.firestore {
       allow read: if estConnecte();
       allow write: if estAdmin();
     }
+
+    match /articles_boutique/{id} {
+      allow read: if estConnecte();
+      allow write: if estAdmin();
+    }
+
+    match /commandes/{id} {
+      allow read: if estConnecte() && (resource.data.membreId == request.auth.uid || estAdmin());
+      allow create: if estConnecte() && request.resource.data.membreId == request.auth.uid;
+      allow update, delete: if estAdmin();
+    }
   }
 }

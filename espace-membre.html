@@ -135,6 +135,25 @@
   </div>
 
   <div class="app-panel">
+    <div class="panel-toggle" data-target="panelBoutique">
+      <h2>Boutique</h2>
+      <span class="panel-chevron">▾</span>
+    </div>
+    <div class="panel-body collapsed" id="panelBoutique">
+      <h3>Articles disponibles</h3>
+      <div class="data-list" id="zoneArticlesBoutique"><div class="empty-state">Chargement...</div></div>
+
+      <h3 style="margin-top:18px;">Mon panier</h3>
+      <div class="data-list" id="zonePanier"><div class="empty-state">Panier vide.</div></div>
+      <p id="panierTotal" style="font-weight:600; margin-top:8px;"></p>
+      <button class="btn-sm primary" id="btnValiderPanier" style="margin-top:6px;">Valider ma commande</button>
+
+      <h3 style="margin-top:18px;">Historique de mes commandes</h3>
+      <div class="data-list" id="zoneMesCommandes"><div class="empty-state">Chargement...</div></div>
+    </div>
+  </div>
+
+  <div class="app-panel">
     <div class="panel-toggle" data-target="panelPaiements">
       <h2>Historique de mes paiements</h2>
       <span class="panel-chevron">▾</span>

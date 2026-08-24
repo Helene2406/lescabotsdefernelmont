@@ -37,6 +37,7 @@
     <button class="tab-btn" data-tab="messages" id="tabMessagesBtn">Messages</button>
     <button class="tab-btn" data-tab="blog">Blog</button>
     <button class="tab-btn" data-tab="videos">Vidéos</button>
+    <button class="tab-btn" data-tab="boutique">Boutique</button>
   </div>
 
   <div id="panel-cesoir" class="tab-panel">
@@ -134,6 +135,21 @@
       </div>
       <p style="color:var(--slate); font-size:0.85rem; margin-bottom:14px;">Visibles uniquement par les membres connectés.</p>
       <div class="data-list" id="listeVideos"><div class="empty-state">Chargement...</div></div>
+    </div>
+  </div>
+
+  <div id="panel-boutique" class="tab-panel hidden">
+    <div class="app-panel">
+      <div class="section-heading">
+        <h2>Articles</h2>
+        <button class="btn-sm primary" id="btnAjouterArticleBoutique">+ Ajouter un article</button>
+      </div>
+      <div class="data-list" id="listeArticlesBoutique"><div class="empty-state">Chargement...</div></div>
+      <button class="btn-sm" id="btnInitArticles" style="margin-top:14px;">Initialiser des articles de base</button>
+    </div>
+    <div class="app-panel">
+      <h2>Commandes</h2>
+      <div class="data-list" id="listeCommandes"><div class="empty-state">Chargement...</div></div>
     </div>
   </div>
 
