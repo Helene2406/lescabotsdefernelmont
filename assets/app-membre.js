@@ -1,6 +1,6 @@
 import {
   auth, db, onAuthStateChanged, signOut,
-  doc, getDoc, getDocAvecReessai, setDoc, getDocs, collection, addDoc, updateDoc, query, orderBy, where
+  doc, getDoc, getDocAvecReessai, setDoc, getDocs, collection, addDoc, updateDoc, query, orderBy, where, serverTimestamp
 } from "./firebase-config.js";
 import { meteoPour, alerteMeteo, iconeCode } from "./meteo.js";
 
@@ -65,6 +65,7 @@ function afficherAccueil() {
   preremplirMonProfil();
   afficherMesChiens();
   chargerHistoriquePaiementsMembre();
+  chargerBoutiqueMembre();
 }
 
 function afficherRappelAbonnement() {
@@ -718,4 +719,114 @@ function alerteVaccinsChien(chien) {
     }
   });
   return alertes;
+}
+
+// ==========================================================================
+// BOUTIQUE — panier local puis commande à valider par l'admin
+// ==========================================================================
+let panierLocal = [];
+
+async function chargerBoutiqueMembre() {
+  const snap = await getDocs(query(collection(db, 'articles_boutique'), where('actif', '==', true)));
+  const articles = [];
+  snap.forEach(d => articles.push({ id: d.id, ...d.data() }));
+
+  const wrap = document.getElementById('zoneArticlesBoutique');
+  if (articles.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucun article disponible pour l\'instant.</div>';
+  } else {
+    wrap.innerHTML = articles.map(a => `
+      <div class="data-row">
+        <div class="data-main">
+          <div class="data-title">${escapeHtml(a.nom)}</div>
+          <div class="data-sub">${Number(a.prix).toFixed(2)} € TTC · ${a.stock > 0 ? `${a.stock} en stock` : '<span class="badge badge-danger">Rupture de stock</span>'}</div>
+        </div>
+        <div class="data-actions">
+          <button class="btn-sm primary" ${a.stock <= 0 ? 'disabled' : ''} onclick="window.ajouterAuPanier('${a.id}', '${escapeAttr(a.nom)}', ${a.prix}, ${a.stock})">Ajouter au panier</button>
+        </div>
+      </div>`).join('');
+  }
+
+  afficherPanier();
+  chargerMesCommandes();
+}
+
+window.ajouterAuPanier = (articleId, nom, prix, stock) => {
+  const existant = panierLocal.find(l => l.articleId === articleId);
+  if (existant) {
+    if (existant.quantite >= stock) { alert('Stock insuffisant.'); return; }
+    existant.quantite++;
+  } else {
+    panierLocal.push({ articleId, nom, prix, quantite: 1 });
+  }
+  afficherPanier();
+};
+
+window.retirerDuPanier = (articleId) => {
+  panierLocal = panierLocal.filter(l => l.articleId !== articleId);
+  afficherPanier();
+};
+
+function afficherPanier() {
+  const wrap = document.getElementById('zonePanier');
+  const totalEl = document.getElementById('panierTotal');
+  if (panierLocal.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Panier vide.</div>';
+    totalEl.textContent = '';
+    return;
+  }
+  wrap.innerHTML = panierLocal.map(l => `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${l.quantite} × ${escapeHtml(l.nom)}</div>
+        <div class="data-sub">${(l.prix * l.quantite).toFixed(2)} € TTC</div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm danger" onclick="window.retirerDuPanier('${l.articleId}')">Retirer</button>
+      </div>
+    </div>`).join('');
+  const total = panierLocal.reduce((s, l) => s + l.prix * l.quantite, 0);
+  totalEl.textContent = `Total : ${total.toFixed(2)} € TTC`;
+}
+
+document.getElementById('btnValiderPanier').addEventListener('click', async () => {
+  if (panierLocal.length === 0) { alert('Votre panier est vide.'); return; }
+  const total = panierLocal.reduce((s, l) => s + l.prix * l.quantite, 0);
+  await addDoc(collection(db, 'commandes'), {
+    membreId: membreUid,
+    lignes: panierLocal.map(l => ({ articleId: l.articleId, nom: l.nom, prixUnitaire: l.prix, quantite: l.quantite })),
+    total,
+    statut: 'en_attente',
+    dateCreation: serverTimestamp()
+  });
+  panierLocal = [];
+  afficherPanier();
+  alert('Commande envoyée à Katia pour validation.');
+  chargerMesCommandes();
+});
+
+async function chargerMesCommandes() {
+  const snap = await getDocs(query(collection(db, 'commandes'), where('membreId', '==', membreUid)));
+  const commandes = [];
+  snap.forEach(d => commandes.push({ id: d.id, ...d.data() }));
+  commandes.sort((a, b) => (b.dateCreation?.toMillis?.() || 0) - (a.dateCreation?.toMillis?.() || 0));
+
+  const wrap = document.getElementById('zoneMesCommandes');
+  if (commandes.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucune commande pour l\'instant.</div>';
+    return;
+  }
+  wrap.innerHTML = commandes.map(c => {
+    const detail = (c.lignes || []).map(l => `${l.quantite} × ${escapeHtml(l.nom)}`).join(', ');
+    const badge = c.statut === 'validee' ? '<span class="badge badge-ok">Validée</span>'
+      : c.statut === 'annulee' ? '<span class="badge badge-danger">Annulée</span>'
+      : '<span class="badge badge-warn">En attente</span>';
+    return `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${Number(c.total).toFixed(2)} € TTC ${badge}</div>
+        <div class="data-sub">${detail}</div>
+      </div>
+    </div>`;
+  }).join('');
 }

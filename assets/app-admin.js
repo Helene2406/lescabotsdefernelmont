@@ -37,6 +37,7 @@ onAuthStateChanged(auth, async (user) => {
   chargerRdv();
   chargerArticles();
   chargerVideosAdmin();
+  chargerBoutiqueAdmin();
   console.log('%c🍓 Un petit jardin secret pour toi, Katia...', 'color:#C0392B; font-size:13px;');
 });
 
@@ -1589,3 +1590,170 @@ async function chargerVaccinsARappeler() {
   if (lignes.length === 0) { zone.innerHTML = ''; return; }
   zone.innerHTML = `<div class="banner-alert">💉 Vaccins à surveiller : ${lignes.join(', ')}</div>`;
 }
+
+// ==========================================================================
+// BOUTIQUE — articles, stock, commandes (validation = décompte du stock)
+// ==========================================================================
+const ARTICLES_DE_BASE = [
+  { nom: 'Laisse en cuir', prix: 0, stock: 0, actif: true },
+  { nom: 'Collier en cuir', prix: 0, stock: 0, actif: true },
+  { nom: 'Collier Torquatus', prix: 0, stock: 0, actif: true },
+  { nom: 'Bonbon dressage BBQ', prix: 0, stock: 0, actif: true },
+  { nom: 'Grosse boîte de bonbons os', prix: 0, stock: 0, actif: true }
+];
+
+let currentArticlesBoutique = [];
+
+async function chargerBoutiqueAdmin() {
+  const snap = await getDocs(collection(db, 'articles_boutique'));
+  currentArticlesBoutique = [];
+  snap.forEach(d => currentArticlesBoutique.push({ id: d.id, ...d.data() }));
+  renderArticlesBoutiqueAdmin();
+  await chargerCommandesAdmin();
+}
+
+function renderArticlesBoutiqueAdmin() {
+  const wrap = document.getElementById('listeArticlesBoutique');
+  if (currentArticlesBoutique.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucun article pour l\'instant.</div>';
+    return;
+  }
+  wrap.innerHTML = currentArticlesBoutique.map(a => `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(a.nom)} ${!a.actif ? '<span class="badge badge-neutral">Masqué</span>' : ''}</div>
+        <div class="data-sub">${Number(a.prix).toFixed(2)} € TTC · <span class="${a.stock <= 0 ? 'badge badge-danger' : 'badge badge-ok'}">${a.stock} en stock</span></div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm" onclick="window.editerArticleBoutique('${a.id}')">Modifier</button>
+        <button class="btn-sm danger" onclick="window.supprimerArticleBoutique('${a.id}')">Supprimer</button>
+      </div>
+    </div>`).join('');
+}
+
+document.getElementById('btnAjouterArticleBoutique').addEventListener('click', () => ouvrirModalArticleBoutique());
+
+window.editerArticleBoutique = (id) => {
+  const a = currentArticlesBoutique.find(x => x.id === id);
+  ouvrirModalArticleBoutique(a);
+};
+
+window.supprimerArticleBoutique = async (id) => {
+  if (!confirm('Supprimer cet article ?')) return;
+  await deleteDoc(doc(db, 'articles_boutique', id));
+  chargerBoutiqueAdmin();
+};
+
+function ouvrirModalArticleBoutique(article) {
+  const isEdit = !!article;
+  const html = `
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-box">
+        <h3>${isEdit ? 'Modifier l\'article' : 'Ajouter un article'}</h3>
+        <div class="field"><label>Nom</label><input id="ab-nom" value="${isEdit ? escapeAttr(article.nom) : ''}"></div>
+        <div class="form-grid">
+          <div class="field"><label>Prix TTC (€)</label><input type="number" step="0.01" id="ab-prix" value="${isEdit ? article.prix : ''}"></div>
+          <div class="field"><label>Stock</label><input type="number" id="ab-stock" value="${isEdit ? article.stock : 0}"></div>
+        </div>
+        <div class="field"><label>Visible dans la boutique</label>
+          <select id="ab-actif">
+            <option value="oui" ${!isEdit || article.actif ? 'selected' : ''}>Oui</option>
+            <option value="non" ${isEdit && !article.actif ? 'selected' : ''}>Non</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-sm" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" id="ab-save">Enregistrer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('ab-save').addEventListener('click', async () => {
+    const nom = document.getElementById('ab-nom').value.trim();
+    const prix = parseFloat(document.getElementById('ab-prix').value);
+    const stock = parseInt(document.getElementById('ab-stock').value, 10);
+    if (!nom || isNaN(prix) || isNaN(stock)) { alert('Merci de remplir nom, prix et stock.'); return; }
+    const data = { nom, prix, stock, actif: document.getElementById('ab-actif').value === 'oui' };
+    if (isEdit) {
+      await updateDoc(doc(db, 'articles_boutique', article.id), data);
+    } else {
+      await addDoc(collection(db, 'articles_boutique'), data);
+    }
+    window.fermerModal();
+    chargerBoutiqueAdmin();
+  });
+}
+
+document.getElementById('btnInitArticles').addEventListener('click', async () => {
+  if (currentArticlesBoutique.length > 0 && !confirm('Ajouter les articles de base en plus des existants (prix et stock à 0, à compléter) ?')) return;
+  for (const a of ARTICLES_DE_BASE) {
+    await addDoc(collection(db, 'articles_boutique'), a);
+  }
+  chargerBoutiqueAdmin();
+});
+
+async function chargerCommandesAdmin() {
+  const snap = await getDocs(collection(db, 'commandes'));
+  const commandes = [];
+  snap.forEach(d => commandes.push({ id: d.id, ...d.data() }));
+  commandes.sort((a, b) => (b.dateCreation?.toMillis?.() || 0) - (a.dateCreation?.toMillis?.() || 0));
+
+  const wrap = document.getElementById('listeCommandes');
+  if (commandes.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucune commande pour l\'instant.</div>';
+    return;
+  }
+
+  wrap.innerHTML = commandes.map(c => {
+    const membre = currentMembres.find(m => m.id === c.membreId);
+    const detailLignes = (c.lignes || []).map(l => `${l.quantite} × ${escapeHtml(l.nom)}`).join(', ');
+    const badgeStatut = c.statut === 'validee' ? '<span class="badge badge-ok">Validée</span>'
+      : c.statut === 'annulee' ? '<span class="badge badge-danger">Annulée</span>'
+      : '<span class="badge badge-warn">En attente</span>';
+    return `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(membre?.nomMaitre || '?')} — ${Number(c.total).toFixed(2)} € TTC ${badgeStatut}</div>
+        <div class="data-sub">${detailLignes}</div>
+        ${c.numeroFacture ? `<div class="data-sub">N° facture compta : <strong>${escapeHtml(c.numeroFacture)}</strong></div>` : ''}
+        ${c.statut === 'validee' ? `
+          <div class="form-grid" style="margin-top:8px; max-width:320px;">
+            <div class="field"><label>N° de facture compta</label><input id="fact-${c.id}" value="${escapeAttr(c.numeroFacture||'')}" placeholder="ex: FA2026-042"></div>
+          </div>
+          <button class="btn-sm" onclick="window.enregistrerNumeroFacture('${c.id}')">Enregistrer le n°</button>
+        ` : ''}
+      </div>
+      <div class="data-actions">
+        ${c.statut === 'en_attente' ? `
+          <button class="btn-sm primary" onclick="window.validerCommande('${c.id}')">Valider (décompte le stock)</button>
+          <button class="btn-sm danger" onclick="window.annulerCommande('${c.id}')">Annuler</button>
+        ` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.validerCommande = async (commandeId) => {
+  const commande = (await getDoc(doc(db, 'commandes', commandeId))).data();
+  for (const ligne of commande.lignes || []) {
+    const article = currentArticlesBoutique.find(a => a.id === ligne.articleId);
+    if (article) {
+      const nouveauStock = Math.max(0, article.stock - ligne.quantite);
+      await updateDoc(doc(db, 'articles_boutique', ligne.articleId), { stock: nouveauStock });
+    }
+  }
+  await updateDoc(doc(db, 'commandes', commandeId), { statut: 'validee', dateValidation: serverTimestamp() });
+  chargerBoutiqueAdmin();
+};
+
+window.annulerCommande = async (commandeId) => {
+  if (!confirm('Annuler cette commande ? Le stock ne sera pas touché.')) return;
+  await updateDoc(doc(db, 'commandes', commandeId), { statut: 'annulee' });
+  chargerCommandesAdmin();
+};
+
+window.enregistrerNumeroFacture = async (commandeId) => {
+  const numero = document.getElementById('fact-' + commandeId).value.trim();
+  await updateDoc(doc(db, 'commandes', commandeId), { numeroFacture: numero });
+  alert('N° de facture enregistré.');
+};
