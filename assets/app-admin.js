@@ -25,9 +25,13 @@ onAuthStateChanged(auth, async (user) => {
   }
   document.getElementById('adminNom').textContent = mDoc.data().nomMaitre || 'Katia';
   chargerGroupes();
-  chargerMembres();
+  chargerMembres().then(() => chargerConversations());
   chargerCeSoir();
   afficherMeteoDuJour();
+  chargerTarifs();
+  chargerRdv();
+  chargerArticles();
+  chargerVideosAdmin();
 });
 
 document.getElementById('logoutBtn').addEventListener('click', () => signOut(auth).then(() => window.location.href = 'connexion.html'));
@@ -378,3 +382,448 @@ function escapeHtml(str) {
   return str.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function escapeAttr(str) { return escapeHtml(str); }
+
+// ==========================================================================
+// TARIFS
+// ==========================================================================
+async function chargerTarifs() {
+  const configDoc = await getDoc(doc(db, 'tarifs', 'config'));
+  const data = configDoc.exists() ? configDoc.data() : { abonnement: 80, coursUnite: 8, cotisation: 75, individuel: 85 };
+  document.getElementById('tf-abonnement').value = data.abonnement;
+  document.getElementById('tf-coursUnite').value = data.coursUnite;
+  document.getElementById('tf-cotisation').value = data.cotisation;
+  document.getElementById('tf-individuel').value = data.individuel;
+
+  const extraSnap = await getDocs(collection(db, 'tarifs_extra'));
+  const wrap = document.getElementById('listeTarifsExtra');
+  if (extraSnap.empty) {
+    wrap.innerHTML = '<div class="empty-state">Aucun tarif supplémentaire.</div>';
+  } else {
+    const lignes = [];
+    extraSnap.forEach(d => {
+      const t = d.data();
+      lignes.push(`
+      <div class="data-row">
+        <div class="data-main">
+          <div class="data-title">${escapeHtml(t.nom)}</div>
+          <div class="data-sub">${Number(t.prix).toFixed(2)} € TTC</div>
+        </div>
+        <div class="data-actions">
+          <button class="btn-sm danger" onclick="window.supprimerTarifExtra('${d.id}')">Supprimer</button>
+        </div>
+      </div>`);
+    });
+    wrap.innerHTML = lignes.join('');
+  }
+}
+
+document.getElementById('btnSauverTarifs').addEventListener('click', async () => {
+  await setDoc(doc(db, 'tarifs', 'config'), {
+    abonnement: parseFloat(document.getElementById('tf-abonnement').value) || 0,
+    coursUnite: parseFloat(document.getElementById('tf-coursUnite').value) || 0,
+    cotisation: parseFloat(document.getElementById('tf-cotisation').value) || 0,
+    individuel: parseFloat(document.getElementById('tf-individuel').value) || 0
+  });
+  alert('Tarifs enregistrés.');
+});
+
+document.getElementById('btnAjouterTarifExtra').addEventListener('click', () => {
+  const html = `
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-box">
+        <h3>Ajouter un tarif</h3>
+        <div class="field"><label>Nom du tarif</label><input id="te-nom" placeholder="ex: Toilettage"></div>
+        <div class="field"><label>Prix TTC (€)</label><input type="number" step="0.01" id="te-prix"></div>
+        <div class="modal-actions">
+          <button class="btn-sm" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" id="te-save">Enregistrer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('te-save').addEventListener('click', async () => {
+    const nom = document.getElementById('te-nom').value.trim();
+    const prix = parseFloat(document.getElementById('te-prix').value);
+    if (!nom || isNaN(prix)) { alert('Merci de remplir le nom et le prix.'); return; }
+    await addDoc(collection(db, 'tarifs_extra'), { nom, prix });
+    window.fermerModal();
+    chargerTarifs();
+  });
+});
+
+window.supprimerTarifExtra = async (id) => {
+  if (!confirm('Supprimer ce tarif ?')) return;
+  await deleteDoc(doc(db, 'tarifs_extra', id));
+  chargerTarifs();
+};
+
+// ==========================================================================
+// RDV
+// ==========================================================================
+async function chargerRdv() {
+  const snap = await getDocs(collection(db, 'rdv'));
+  const rdvs = [];
+  snap.forEach(d => rdvs.push({ id: d.id, ...d.data() }));
+  rdvs.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+  const wrap = document.getElementById('listeRdv');
+  if (rdvs.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucun RDV créé pour l\'instant.</div>';
+    return;
+  }
+
+  const reponsesSnap = await getDocs(collection(db, 'rdv_reponses'));
+  const reponsesParRdv = {};
+  reponsesSnap.forEach(d => {
+    const r = d.data();
+    if (!reponsesParRdv[r.rdvId]) reponsesParRdv[r.rdvId] = [];
+    reponsesParRdv[r.rdvId].push(r);
+  });
+
+  wrap.innerHTML = rdvs.map(rdv => {
+    const reponses = reponsesParRdv[rdv.id] || [];
+    const presents = reponses.filter(r => r.statut === 'present');
+    const payes = presents.filter(r => r.paye).length;
+    const dateLabel = rdv.date ? new Date(rdv.date + 'T00:00:00').toLocaleDateString('fr-BE', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+    return `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(rdv.titre)}</div>
+        <div class="data-sub">${dateLabel} ${rdv.heure || ''} · ${escapeHtml(rdv.lieu || '')} · ${escapeHtml(rdv.modalite || '')}</div>
+        <div class="data-sub"><span class="badge badge-ok">${presents.length} présent(s)</span> <span class="badge badge-neutral">${payes}/${presents.length} payé(s)</span></div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm danger" onclick="window.supprimerRdv('${rdv.id}')">Supprimer</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('btnAjouterRdv').addEventListener('click', () => {
+  const html = `
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-box">
+        <h3>Créer un RDV</h3>
+        <div class="field"><label>Titre</label><input id="rd-titre" placeholder="ex: Repas du club"></div>
+        <div class="form-grid">
+          <div class="field"><label>Date</label><input type="date" id="rd-date"></div>
+          <div class="field"><label>Heure</label><input type="time" id="rd-heure"></div>
+        </div>
+        <div class="field"><label>Lieu</label><input id="rd-lieu"></div>
+        <div class="field"><label>Modalité</label><input id="rd-modalite" placeholder="ex: 15€/pers, à régler sur place"></div>
+        <div class="modal-actions">
+          <button class="btn-sm" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" id="rd-save">Créer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('rd-save').addEventListener('click', async () => {
+    const titre = document.getElementById('rd-titre').value.trim();
+    const date = document.getElementById('rd-date').value;
+    if (!titre || !date) { alert('Merci de renseigner au moins un titre et une date.'); return; }
+    await addDoc(collection(db, 'rdv'), {
+      titre, date,
+      heure: document.getElementById('rd-heure').value,
+      lieu: document.getElementById('rd-lieu').value.trim(),
+      modalite: document.getElementById('rd-modalite').value.trim(),
+      dateCreation: serverTimestamp()
+    });
+    window.fermerModal();
+    chargerRdv();
+  });
+});
+
+window.supprimerRdv = async (id) => {
+  if (!confirm('Supprimer ce RDV ? Les réponses des membres seront aussi supprimées.')) return;
+  await deleteDoc(doc(db, 'rdv', id));
+  chargerRdv();
+};
+
+// ==========================================================================
+// MESSAGES (chat admin <-> membre)
+// ==========================================================================
+let conversationOuverte = null;
+
+async function chargerConversations() {
+  const snap = await getDocs(collection(db, 'conversations'));
+  const convs = {};
+  snap.forEach(d => { convs[d.id] = d.data(); });
+
+  const wrap = document.getElementById('listeConversations');
+  const membresAvecConv = currentMembres.filter(m => convs[m.id]);
+  const autresMembres = currentMembres.filter(m => !convs[m.id]);
+  const ordonne = [...membresAvecConv.sort((a, b) => (convs[b.id]?.dateDernierMessage || '').localeCompare(convs[a.id]?.dateDernierMessage || '')), ...autresMembres];
+
+  let unReadTotal = 0;
+
+  if (ordonne.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucun membre pour l\'instant.</div>';
+  } else {
+    wrap.innerHTML = ordonne.map(m => {
+      const c = convs[m.id];
+      const nonLu = c?.nonLuAdmin;
+      if (nonLu) unReadTotal++;
+      return `
+      <div class="data-row" style="cursor:pointer;" onclick="window.ouvrirConversation('${m.id}')">
+        <div class="data-main">
+          <div class="data-title">${escapeHtml(m.nomMaitre)} ${nonLu ? '<span class="badge badge-danger">Nouveau</span>' : ''}</div>
+          <div class="data-sub">${c?.dernierMessage ? escapeHtml(c.dernierMessage).slice(0, 60) : 'Aucun message pour l\'instant'}</div>
+        </div>
+        <div class="data-actions"><button class="btn-sm">Ouvrir</button></div>
+      </div>`;
+    }).join('');
+  }
+
+  const tabBtn = document.getElementById('tabMessagesBtn');
+  tabBtn.classList.toggle('has-unread', unReadTotal > 0);
+}
+
+window.ouvrirConversation = async (uid) => {
+  conversationOuverte = uid;
+  const membre = currentMembres.find(m => m.id === uid);
+  const msgsSnap = await getDocs(collection(db, 'conversations', uid, 'messages'));
+  const msgs = [];
+  msgsSnap.forEach(d => msgs.push({ id: d.id, ...d.data() }));
+  msgs.sort((a, b) => (a.dateEnvoi || '').localeCompare(b.dateEnvoi || ''));
+
+  // Marquer comme lus les messages envoyés par le membre
+  await Promise.all(msgs.filter(m => m.expediteur === 'membre' && !m.lu).map(m =>
+    updateDoc(doc(db, 'conversations', uid, 'messages', m.id), { lu: true })
+  ));
+  await setDoc(doc(db, 'conversations', uid), { nonLuAdmin: false }, { merge: true });
+
+  const html = `
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-box" style="max-width:520px;">
+        <h3>${escapeHtml(membre?.nomMaitre || '')}</h3>
+        <div class="chat-thread" id="chatThread">
+          ${msgs.map(m => bulleMessage(m, 'admin')).join('') || '<div class="empty-state">Aucun message.</div>'}
+        </div>
+        <div class="chat-input-row">
+          <input type="text" id="chatInputAdmin" placeholder="Écrire un message...">
+          <button class="btn-sm primary" id="chatSendAdmin">Envoyer</button>
+        </div>
+        <div class="modal-actions"><button class="btn-sm" onclick="window.fermerModal()">Fermer</button></div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('chatThread').scrollTop = 999999;
+
+  document.getElementById('chatSendAdmin').addEventListener('click', () => envoyerMessageAdmin(uid));
+  document.getElementById('chatInputAdmin').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') envoyerMessageAdmin(uid);
+  });
+
+  chargerConversations();
+};
+
+async function envoyerMessageAdmin(uid) {
+  const input = document.getElementById('chatInputAdmin');
+  const texte = input.value.trim();
+  if (!texte) return;
+  input.value = '';
+  const maintenant = new Date().toISOString();
+  await addDoc(collection(db, 'conversations', uid, 'messages'), {
+    texte, expediteur: 'admin', dateEnvoi: maintenant, lu: false
+  });
+  await setDoc(doc(db, 'conversations', uid), {
+    dernierMessage: texte, dateDernierMessage: maintenant, nonLuMembre: true
+  }, { merge: true });
+  window.ouvrirConversation(uid);
+}
+
+document.getElementById('btnMessageGroupe').addEventListener('click', () => {
+  const html = `
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-box">
+        <h3>Écrire à un groupe ou à tous les membres</h3>
+        <div class="field"><label>Destinataires</label>
+          <select id="bc-cible">
+            <option value="tous">Tous les membres</option>
+            ${currentGroupes.map(g => `<option value="${g.id}">${escapeHtml(g.nom)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field"><label>Message</label><textarea id="bc-texte" rows="4" style="resize:vertical;"></textarea></div>
+        <div class="modal-actions">
+          <button class="btn-sm" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" id="bc-save">Envoyer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('bc-save').addEventListener('click', async () => {
+    const cible = document.getElementById('bc-cible').value;
+    const texte = document.getElementById('bc-texte').value.trim();
+    if (!texte) { alert('Merci d\'écrire un message.'); return; }
+    const destinataires = cible === 'tous' ? currentMembres : currentMembres.filter(m => m.groupeId === cible);
+    const maintenant = new Date().toISOString();
+    await Promise.all(destinataires.map(async (m) => {
+      await addDoc(collection(db, 'conversations', m.id, 'messages'), {
+        texte, expediteur: 'admin', dateEnvoi: maintenant, lu: false
+      });
+      await setDoc(doc(db, 'conversations', m.id), {
+        dernierMessage: texte, dateDernierMessage: maintenant, nonLuMembre: true
+      }, { merge: true });
+    }));
+    window.fermerModal();
+    alert(`Message envoyé à ${destinataires.length} membre(s).`);
+    chargerConversations();
+  });
+});
+
+function bulleMessage(m, pointDeVue) {
+  const estMoi = m.expediteur === pointDeVue;
+  const heure = m.dateEnvoi ? new Date(m.dateEnvoi).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' }) : '';
+  const coche = estMoi ? `<span class="chat-check ${m.lu ? 'lu' : ''}">${m.lu ? '✓✓' : '✓'}</span>` : '';
+  return `
+    <div class="chat-bubble ${estMoi ? 'moi' : 'autre'}">
+      ${escapeHtml(m.texte)}
+      <div class="chat-meta">${heure} ${coche}</div>
+    </div>`;
+}
+
+// ==========================================================================
+// BLOG (articles publics)
+// ==========================================================================
+async function chargerArticles() {
+  const snap = await getDocs(collection(db, 'articles'));
+  const articles = [];
+  snap.forEach(d => articles.push({ id: d.id, ...d.data() }));
+  articles.sort((a, b) => (b.datePublication || '').localeCompare(a.datePublication || ''));
+
+  const wrap = document.getElementById('listeArticles');
+  if (articles.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucun article pour l\'instant.</div>';
+    return;
+  }
+  wrap.innerHTML = articles.map(a => `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(a.titre)}</div>
+        <div class="data-sub">${a.datePublication || ''} · ${escapeHtml((a.contenu || '').slice(0, 80))}${(a.contenu||'').length > 80 ? '…' : ''}</div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm" onclick="window.editerArticle('${a.id}')">Modifier</button>
+        <button class="btn-sm danger" onclick="window.supprimerArticle('${a.id}')">Supprimer</button>
+      </div>
+    </div>`).join('');
+}
+
+document.getElementById('btnAjouterArticle').addEventListener('click', () => ouvrirModalArticle());
+
+window.editerArticle = async (id) => {
+  const d = await getDoc(doc(db, 'articles', id));
+  ouvrirModalArticle({ id, ...d.data() });
+};
+
+window.supprimerArticle = async (id) => {
+  if (!confirm('Supprimer cet article ?')) return;
+  await deleteDoc(doc(db, 'articles', id));
+  chargerArticles();
+};
+
+function ouvrirModalArticle(article) {
+  const isEdit = !!article;
+  const html = `
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-box" style="max-width:520px;">
+        <h3>${isEdit ? 'Modifier l\'article' : 'Nouvel article'}</h3>
+        <div class="field"><label>Titre</label><input id="ar-titre" value="${isEdit ? escapeAttr(article.titre) : ''}"></div>
+        <div class="field"><label>Image (URL, optionnel)</label><input id="ar-image" value="${isEdit ? escapeAttr(article.image||'') : ''}" placeholder="https://..."></div>
+        <div class="field"><label>Contenu</label><textarea id="ar-contenu" rows="7" style="resize:vertical;">${isEdit ? escapeHtml(article.contenu) : ''}</textarea></div>
+        <div class="modal-actions">
+          <button class="btn-sm" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" id="ar-save">${isEdit ? 'Enregistrer' : 'Publier'}</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('ar-save').addEventListener('click', async () => {
+    const titre = document.getElementById('ar-titre').value.trim();
+    const contenu = document.getElementById('ar-contenu').value.trim();
+    if (!titre || !contenu) { alert('Merci de remplir le titre et le contenu.'); return; }
+    const data = {
+      titre, contenu,
+      image: document.getElementById('ar-image').value.trim(),
+      datePublication: isEdit ? article.datePublication : new Date().toISOString().slice(0, 10)
+    };
+    if (isEdit) {
+      await updateDoc(doc(db, 'articles', article.id), data);
+    } else {
+      await addDoc(collection(db, 'articles'), data);
+    }
+    window.fermerModal();
+    chargerArticles();
+  });
+}
+
+// ==========================================================================
+// VIDÉOS D'APPRENTISSAGE
+// ==========================================================================
+async function chargerVideosAdmin() {
+  const snap = await getDocs(collection(db, 'videos'));
+  const videos = [];
+  snap.forEach(d => videos.push({ id: d.id, ...d.data() }));
+
+  const wrap = document.getElementById('listeVideos');
+  if (videos.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucune vidéo pour l\'instant.</div>';
+    return;
+  }
+  wrap.innerHTML = videos.map(v => `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(v.titre)}</div>
+        <div class="data-sub">${escapeHtml((v.texte || '').slice(0, 80))}</div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm" onclick="window.editerVideo('${v.id}')">Modifier</button>
+        <button class="btn-sm danger" onclick="window.supprimerVideo('${v.id}')">Supprimer</button>
+      </div>
+    </div>`).join('');
+}
+
+document.getElementById('btnAjouterVideo').addEventListener('click', () => ouvrirModalVideo());
+
+window.editerVideo = async (id) => {
+  const d = await getDoc(doc(db, 'videos', id));
+  ouvrirModalVideo({ id, ...d.data() });
+};
+
+window.supprimerVideo = async (id) => {
+  if (!confirm('Supprimer cette vidéo ?')) return;
+  await deleteDoc(doc(db, 'videos', id));
+  chargerVideosAdmin();
+};
+
+function ouvrirModalVideo(video) {
+  const isEdit = !!video;
+  const html = `
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-box" style="max-width:520px;">
+        <h3>${isEdit ? 'Modifier la vidéo' : 'Ajouter une vidéo'}</h3>
+        <div class="field"><label>Titre (ex: Apprendre "assis")</label><input id="vd-titre" value="${isEdit ? escapeAttr(video.titre) : ''}"></div>
+        <div class="field"><label>Lien vidéo (YouTube)</label><input id="vd-url" value="${isEdit ? escapeAttr(video.url||'') : ''}" placeholder="https://www.youtube.com/watch?v=..."></div>
+        <div class="field"><label>Texte explicatif</label><textarea id="vd-texte" rows="5" style="resize:vertical;">${isEdit ? escapeHtml(video.texte||'') : ''}</textarea></div>
+        <div class="modal-actions">
+          <button class="btn-sm" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" id="vd-save">${isEdit ? 'Enregistrer' : 'Ajouter'}</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('vd-save').addEventListener('click', async () => {
+    const titre = document.getElementById('vd-titre').value.trim();
+    const url = document.getElementById('vd-url').value.trim();
+    if (!titre || !url) { alert('Merci de remplir le titre et le lien vidéo.'); return; }
+    const data = { titre, url, texte: document.getElementById('vd-texte').value.trim() };
+    if (isEdit) {
+      await updateDoc(doc(db, 'videos', video.id), data);
+    } else {
+      await addDoc(collection(db, 'videos'), data);
+    }
+    window.fermerModal();
+    chargerVideosAdmin();
+  });
+}
