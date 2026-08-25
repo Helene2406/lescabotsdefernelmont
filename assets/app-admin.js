@@ -20,7 +20,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V34';
+const VERSION_SITE = 'V35';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
@@ -39,6 +39,7 @@ onAuthStateChanged(auth, async (user) => {
   await chargerGroupes();
   await chargerMembres();
   await chargerServices();
+  await detecterAbsencesNonRepondues();
   await traiterAbsencesAutomatiques();
   chargerConversations();
   chargerAnniversaires();
@@ -1734,6 +1735,60 @@ async function chargerAbonnementsARenouveler() {
     </div>`;
 }
 
+
+// ==========================================================================
+// DÉTECTION DES NON-RÉPONSES — jusqu'ici, l'enregistrement "absent — non
+// répondu" n'était créé QUE quand le membre lui-même ouvrait sa page (dans
+// son propre navigateur). Un membre qui ne se connecte jamais n'avait donc
+// aucun enregistrement créé, et rien à décompter. Cette fonction fait la
+// même détection côté admin (qui se connecte régulièrement, elle) pour les
+// 60 derniers jours, sans dépendre de la visite du membre.
+// ==========================================================================
+async function detecterAbsencesNonRepondues() {
+  const presSnap = await getDocs(collection(db, 'presences'));
+  const dejaReponduCles = new Set();
+  presSnap.forEach(d => {
+    const p = d.data();
+    dejaReponduCles.add(`${p.groupeId}_${p.dateISO}_${p.uid}`);
+  });
+
+  const annulSnap = await getDocs(collection(db, 'annulations'));
+  const annulesCles = new Set();
+  annulSnap.forEach(d => annulesCles.add(d.id));
+
+  const maintenant = new Date();
+  const aCreer = [];
+
+  for (let i = 0; i <= 60; i++) {
+    const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - i);
+    const jour = JOURS[d.getDay()];
+    const dateISO = dateISOLocale(d);
+
+    currentGroupes.filter(g => g.jour === jour).forEach(g => {
+      if (annulesCles.has(`${g.id}_${dateISO}`)) return; // cours annulé, pas de décompte
+      const heureCours = new Date(`${dateISO}T${g.heureDebut || '00:00'}:00`);
+      const delaiDepasse = maintenant >= new Date(heureCours.getTime() - 24 * 60 * 60 * 1000);
+      if (!delaiDepasse) return;
+
+      currentMembres.filter(m => m.groupeId === g.id).forEach(m => {
+        const cle = `${g.id}_${dateISO}_${m.id}`;
+        if (!dejaReponduCles.has(cle)) {
+          aCreer.push({ groupeId: g.id, uid: m.id, dateISO });
+          dejaReponduCles.add(cle); // éviter les doublons si le même cours revient
+        }
+      });
+    });
+  }
+
+  if (aCreer.length === 0) return;
+
+  for (const p of aCreer) {
+    await setDoc(doc(db, 'presences', `${p.groupeId}_${p.dateISO}_${p.uid}`), {
+      groupeId: p.groupeId, uid: p.uid, dateISO: p.dateISO, statut: 'absent-auto',
+      repondu: new Date().toISOString(), compteAbonnement: false
+    });
+  }
+}
 
 // ==========================================================================
 // DÉCOMPTE DES COURS — traite les réponses "présent" et les absences
