@@ -438,3 +438,34 @@
 }
 .dog-card .dog-title { font-weight: 600; color: var(--navy-dark); }
 .dog-card .dog-sub { color: var(--slate); font-size: 0.82rem; margin-top: 2px; }
+
+/* Liste de sélection de membres (RDV, etc.) — isolée du style .field label */
+.membre-check-list {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid #D4DAE0;
+  border-radius: var(--radius);
+  padding: 6px;
+  background: var(--white);
+}
+.membre-check-row {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  font-size: 0.92rem !important;
+  font-weight: 400 !important;
+  color: var(--ink);
+  margin: 0 !important;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.membre-check-row:hover { background: var(--paper); }
+.membre-check-row input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  margin: 0;
+  accent-color: var(--brass);
+}
+.membre-check-row span { flex: 1; }

@@ -727,24 +727,29 @@ function alerteVaccinsChien(chien) {
 let panierLocal = [];
 
 async function chargerBoutiqueMembre() {
-  const snap = await getDocs(query(collection(db, 'articles_boutique'), where('actif', '==', true)));
-  const articles = [];
-  snap.forEach(d => articles.push({ id: d.id, ...d.data() }));
-
   const wrap = document.getElementById('zoneArticlesBoutique');
-  if (articles.length === 0) {
-    wrap.innerHTML = '<div class="empty-state">Aucun article disponible pour l\'instant.</div>';
-  } else {
-    wrap.innerHTML = articles.map(a => `
-      <div class="data-row">
-        <div class="data-main">
-          <div class="data-title">${escapeHtml(a.nom)}</div>
-          <div class="data-sub">${Number(a.prix).toFixed(2)} € TTC · ${a.stock > 0 ? `${a.stock} en stock` : '<span class="badge badge-danger">Rupture de stock</span>'}</div>
-        </div>
-        <div class="data-actions">
-          <button class="btn-sm primary" ${a.stock <= 0 ? 'disabled' : ''} onclick="window.ajouterAuPanier('${a.id}', '${escapeAttr(a.nom)}', ${a.prix}, ${a.stock})">Ajouter au panier</button>
-        </div>
-      </div>`).join('');
+  try {
+    const snap = await getDocs(query(collection(db, 'articles_boutique'), where('actif', '==', true)));
+    const articles = [];
+    snap.forEach(d => articles.push({ id: d.id, ...d.data() }));
+
+    if (articles.length === 0) {
+      wrap.innerHTML = '<div class="empty-state">Aucun article disponible pour l\'instant.</div>';
+    } else {
+      wrap.innerHTML = articles.map(a => `
+        <div class="data-row">
+          <div class="data-main">
+            <div class="data-title">${escapeHtml(a.nom)}</div>
+            <div class="data-sub">${Number(a.prix).toFixed(2)} € TTC · ${a.stock > 0 ? `${a.stock} en stock` : '<span class="badge badge-danger">Rupture de stock</span>'}</div>
+          </div>
+          <div class="data-actions">
+            <button class="btn-sm primary" ${a.stock <= 0 ? 'disabled' : ''} onclick="window.ajouterAuPanier('${a.id}', '${escapeAttr(a.nom)}', ${a.prix}, ${a.stock})">Ajouter au panier</button>
+          </div>
+        </div>`).join('');
+    }
+  } catch (err) {
+    wrap.innerHTML = `<div class="banner-alert" style="background:#FBEAEA; border-color:#E3B4B4; color:#8A2E2E;">Erreur : ${escapeHtml(err.code || '')} — ${escapeHtml(err.message || String(err))}</div>`;
+    return;
   }
 
   afficherPanier();
@@ -830,3 +835,15 @@ async function chargerMesCommandes() {
     </div>`;
   }).join('');
 }
+
+// ==========================================================================
+// Filet de sécurité : si une zone reste bloquée sur "..." après un moment,
+// c'est qu'un chargement a échoué silencieusement — on le dit clairement.
+// ==========================================================================
+setTimeout(() => {
+  document.querySelectorAll('.empty-state').forEach(el => {
+    if (el.textContent.trim() === '...') {
+      el.textContent = 'Page vide — une erreur a peut-être empêché le chargement. Recharge la page (Ctrl+F5).';
+    }
+  });
+}, 7000);

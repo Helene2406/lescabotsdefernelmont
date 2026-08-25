@@ -753,6 +753,7 @@ window.supprimerPaiement = async (paiementId, membreId) => {
 // ==========================================================================
 async function chargerCeSoir() {
   const wrap = document.getElementById('listeCeSoir');
+  try {
 
   // Construit la liste des occurrences de cours sur les 7 prochains jours
   // (aujourd'hui inclus), en fonction du jour récurrent de chaque groupe.
@@ -791,7 +792,8 @@ async function chargerCeSoir() {
     const nbMembres = currentMembres.filter(m => m.groupeId === g.id).length;
     const presencesJour = presencesParCle[cle] || { present: 0, absent: 0 };
     const pasAssez = !annule && presencesJour.present < MIN_PARTICIPANTS;
-    const m = await meteoPour(dateISO, g.heureDebut);
+    let m = null;
+    try { m = await meteoPour(dateISO, g.heureDebut); } catch (e) { m = null; }
     const alerte = alerteMeteo(m);
     const dateLabel = date.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
     const estAujourdhui = dateISO === aujourdhuiISO;
@@ -817,6 +819,10 @@ async function chargerCeSoir() {
   }));
 
   wrap.innerHTML = lignes.join('');
+
+  } catch (err) {
+    wrap.innerHTML = `<div class="banner-alert" style="background:#FBEAEA; border-color:#E3B4B4; color:#8A2E2E;">Erreur : ${escapeHtml(err.code || '')} — ${escapeHtml(err.message || String(err))}</div>`;
+  }
 }
 
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -965,10 +971,14 @@ function ouvrirModalService(service) {
 
 document.getElementById('btnInitServices').addEventListener('click', async () => {
   if (currentServices.length > 0 && !confirm('Des services existent déjà. Ajouter quand même les services par défaut (sans toucher aux existants) ?')) return;
-  for (const s of SERVICES_PAR_DEFAUT) {
-    await addDoc(collection(db, 'services'), s);
+  try {
+    for (const s of SERVICES_PAR_DEFAUT) {
+      await addDoc(collection(db, 'services'), s);
+    }
+    chargerServices();
+  } catch (err) {
+    alert('Erreur lors de la création des services : ' + (err.code || '') + ' — ' + (err.message || err));
   }
-  chargerServices();
 });
 
 // ==========================================================================
@@ -1089,10 +1099,11 @@ document.getElementById('btnAjouterRdv').addEventListener('click', () => {
         </div>
         <div class="field hidden" id="rd-membresWrap">
           <label>Membres invités</label>
-          <div style="max-height:180px; overflow-y:auto; border:1px solid #D4DAE0; border-radius:6px; padding:8px;">
+          <div class="membre-check-list">
             ${currentMembres.map(m => `
-              <label style="display:flex; align-items:center; gap:8px; padding:4px 0; font-size:0.9rem;">
-                <input type="checkbox" class="rd-membre-check" value="${m.id}"> ${escapeHtml(m.nomMaitre)}
+              <label class="membre-check-row">
+                <input type="checkbox" class="rd-membre-check" value="${m.id}">
+                <span>${escapeHtml(m.nomMaitre)}</span>
               </label>`).join('')}
           </div>
         </div>
@@ -1686,10 +1697,14 @@ function ouvrirModalArticleBoutique(article) {
 
 document.getElementById('btnInitArticles').addEventListener('click', async () => {
   if (currentArticlesBoutique.length > 0 && !confirm('Ajouter les articles de base en plus des existants (prix et stock à 0, à compléter) ?')) return;
-  for (const a of ARTICLES_DE_BASE) {
-    await addDoc(collection(db, 'articles_boutique'), a);
+  try {
+    for (const a of ARTICLES_DE_BASE) {
+      await addDoc(collection(db, 'articles_boutique'), a);
+    }
+    chargerBoutiqueAdmin();
+  } catch (err) {
+    alert('Erreur lors de la création des articles : ' + (err.code || '') + ' — ' + (err.message || err));
   }
-  chargerBoutiqueAdmin();
 });
 
 async function chargerCommandesAdmin() {
@@ -1757,3 +1772,16 @@ window.enregistrerNumeroFacture = async (commandeId) => {
   await updateDoc(doc(db, 'commandes', commandeId), { numeroFacture: numero });
   alert('N° de facture enregistré.');
 };
+
+// ==========================================================================
+// Filet de sécurité : si une zone reste bloquée sur "..." après un moment,
+// c'est qu'un chargement a échoué silencieusement — on le dit clairement
+// plutôt que de laisser croire que quelque chose va encore arriver.
+// ==========================================================================
+setTimeout(() => {
+  document.querySelectorAll('.empty-state').forEach(el => {
+    if (el.textContent.trim() === '...') {
+      el.textContent = 'Page vide — une erreur a peut-être empêché le chargement. Recharge la page (Ctrl+F5).';
+    }
+  });
+}, 7000);
