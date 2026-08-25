@@ -36,6 +36,7 @@ onAuthStateChanged(auth, async (user) => {
   chargerServicesMembre();
   chargerRdv();
   chargerChat();
+  afficherAlerteMessage();
   chargerVideosMembre();
 });
 
@@ -402,14 +403,48 @@ async function chargerChat() {
   const wrap = document.getElementById('chatThreadMembre');
   wrap.innerHTML = msgs.map(m => bulleMessage(m)).join('') || '<div class="empty-state">Aucun message pour l\'instant. Dites bonjour à Katia !</div>';
   wrap.scrollTop = 999999;
+}
 
-  // Marquer comme lus les messages de l'admin
-  const nonLus = msgs.filter(m => m.expediteur === 'admin' && !m.lu);
+async function marquerChatLu() {
+  const msgsSnap = await getDocs(collection(db, 'conversations', membreUid, 'messages'));
+  const nonLus = [];
+  msgsSnap.forEach(d => {
+    const m = d.data();
+    if (m.expediteur === 'admin' && !m.lu) nonLus.push(d.id);
+  });
   if (nonLus.length > 0) {
-    await Promise.all(nonLus.map(m => updateDoc(doc(db, 'conversations', membreUid, 'messages', m.id), { lu: true })));
+    await Promise.all(nonLus.map(id => updateDoc(doc(db, 'conversations', membreUid, 'messages', id), { lu: true })));
     await setDoc(doc(db, 'conversations', membreUid), { nonLuMembre: false }, { merge: true });
   }
+  document.getElementById('zoneAlerteMessage').innerHTML = '';
+  chargerChat();
 }
+
+async function afficherAlerteMessage() {
+  const convDoc = await getDoc(doc(db, 'conversations', membreUid));
+  const zone = document.getElementById('zoneAlerteMessage');
+  if (convDoc.exists() && convDoc.data().nonLuMembre) {
+    zone.innerHTML = `
+      <div class="alerte-message" onclick="window.ouvrirMessagesEtLire()">
+        💬 Vous avez un nouveau message de Katia — cliquez pour le lire
+      </div>`;
+  } else {
+    zone.innerHTML = '';
+  }
+}
+
+window.ouvrirMessagesEtLire = () => {
+  const toggle = document.querySelector('.panel-toggle[data-target="panelMessages"]');
+  const body = document.getElementById('panelMessages');
+  if (body.classList.contains('collapsed')) {
+    body.classList.remove('collapsed');
+    toggle.classList.add('open');
+  }
+  body.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  marquerChatLu();
+};
+
+window.marquerMessagesLusDepuisAccordeon = () => marquerChatLu();
 
 async function envoyerMessageMembre() {
   const input = document.getElementById('chatInputMembre');
@@ -743,7 +778,7 @@ async function chargerBoutiqueMembre() {
             <div class="data-sub">${Number(a.prix).toFixed(2)} € TTC · ${a.stock > 0 ? `${a.stock} en stock` : '<span class="badge badge-danger">Rupture de stock</span>'}</div>
           </div>
           <div class="data-actions">
-            <button class="btn-sm primary" ${a.stock <= 0 ? 'disabled' : ''} onclick="window.ajouterAuPanier('${a.id}', '${escapeAttr(a.nom)}', ${a.prix}, ${a.stock})">Ajouter au panier</button>
+            <button class="btn-sm primary" ${a.stock <= 0 ? 'disabled' : ''} onclick="window.ajouterAuPanier('${a.id}', '${escapeHtml(a.nom)}', ${a.prix}, ${a.stock})">Ajouter au panier</button>
           </div>
         </div>`).join('');
     }

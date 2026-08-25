@@ -469,3 +469,21 @@
   accent-color: var(--brass);
 }
 .membre-check-row span { flex: 1; }
+
+/* Alerte nouveau message (bandeau haut de page membre) */
+.alerte-message {
+  background: #FBEFDA;
+  border: 2px solid var(--brass);
+  color: #7A5410;
+  padding: 14px 18px;
+  border-radius: var(--radius);
+  margin-bottom: 20px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  cursor: pointer;
+}
+.alerte-message:hover { background: #F7E5C6; }
