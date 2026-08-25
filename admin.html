@@ -74,7 +74,10 @@
           <button class="btn-sm primary" id="btnAjouterMembre">+ Ajouter un membre</button>
         </div>
       </div>
+      <input type="text" id="rechercheMembre" placeholder="🔍 Rechercher un membre (nom, chien)..." style="width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #D4DAE0; border-radius:6px; margin-bottom:14px; font-size:0.95rem;">
       <div class="data-list" id="listeMembres"><div class="empty-state">...</div></div>
+      <button class="btn-sm" id="btnVoirArchives" style="margin-top:14px;">Voir les membres archivés</button>
+      <div class="data-list" id="listeMembresArchives" style="margin-top:10px; display:none;"></div>
     </div>
   </div>
 
@@ -112,6 +115,7 @@
         <h2>Messages</h2>
         <button class="btn-sm primary" id="btnMessageGroupe">Écrire à un groupe / tous</button>
       </div>
+      <input type="text" id="rechercheMessage" placeholder="🔍 Rechercher un membre..." style="width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #D4DAE0; border-radius:6px; margin-bottom:14px; font-size:0.95rem;">
       <div class="data-list" id="listeConversations"><div class="empty-state">...</div></div>
     </div>
   </div>
@@ -149,6 +153,7 @@
     </div>
     <div class="app-panel">
       <h2>Commandes</h2>
+      <input type="text" id="rechercheCommande" placeholder="🔍 Rechercher un membre..." style="width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #D4DAE0; border-radius:6px; margin-bottom:14px; font-size:0.95rem;">
       <div class="data-list" id="listeCommandes"><div class="empty-state">...</div></div>
     </div>
   </div>
@@ -157,6 +162,7 @@
 
 <div id="modalZone"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script type="module" src="assets/app-admin.js"></script>
 </body>
 </html>

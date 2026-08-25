@@ -25,36 +25,47 @@
 
   <div id="zoneAlerteMessage"></div>
 
-  <!-- Toujours visibles -->
-  <div class="app-panel">
-    <h2>Mon abonnement</h2>
-    <div id="badgesAbo"></div>
-    <div id="zoneAbonnementRappel" style="margin-top:12px;"></div>
-    <div id="zoneCotisation" style="margin-top:12px;"></div>
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="accueil">Accueil</button>
+    <button class="tab-btn" data-tab="profil">Mon profil</button>
+    <button class="tab-btn" data-tab="chien">Mon chien</button>
+    <button class="tab-btn" data-tab="services">Services</button>
+    <button class="tab-btn" data-tab="blog" id="tabBlogBtn">Blog</button>
+    <button class="tab-btn" data-tab="messages" id="tabMessagesBtn">Messages</button>
+    <button class="tab-btn" data-tab="rdv">RDV</button>
+    <button class="tab-btn" data-tab="boutique" id="tabBoutiqueBtn">Boutique</button>
+    <button class="tab-btn" data-tab="videos">Vidéos</button>
+    <button class="tab-btn" data-tab="historique">Historique</button>
   </div>
 
-  <div class="app-panel">
-    <h2>Mon groupe</h2>
-    <div class="data-list" id="zoneGroupe"><div class="empty-state">...</div></div>
-  </div>
-
-  <div class="app-panel">
-    <h2>Mes deux prochains cours</h2>
-    <div class="banner-alert" style="margin-bottom:14px;">
-      ⏱️ Merci de répondre au plus tard <strong>24h avant le début du cours</strong>. Passé ce délai, vous serez automatiquement considéré(e) comme absent(e) et le cours sera comptabilisé dans votre abonnement.
+  <!-- ==================== ACCUEIL ==================== -->
+  <div id="panel-accueil" class="tab-panel">
+    <div class="app-panel">
+      <h2>Mon abonnement</h2>
+      <div id="badgesAbo"></div>
+      <div id="zoneAbonnementRappel" style="margin-top:12px;"></div>
+      <div id="zoneCotisation" style="margin-top:12px;"></div>
     </div>
-    <p style="color: var(--slate); font-size: 0.88rem; margin-bottom: 14px;">Une fois votre réponse envoyée, seule Katia peut la modifier.</p>
-    <div class="data-list" id="zoneCours"><div class="empty-state">...</div></div>
+
+    <div class="app-panel">
+      <h2>Mon groupe</h2>
+      <div class="data-list" id="zoneGroupe"><div class="empty-state">...</div></div>
+    </div>
+
+    <div class="app-panel">
+      <h2>Mes deux prochains cours</h2>
+      <div class="banner-alert" style="margin-bottom:14px;">
+        ⏱️ Merci de répondre au plus tard <strong>24h avant le début du cours</strong>. Passé ce délai, vous serez automatiquement considéré(e) comme absent(e) et le cours sera comptabilisé dans votre abonnement.
+      </div>
+      <p style="color: var(--slate); font-size: 0.88rem; margin-bottom: 14px;">Une fois votre réponse envoyée, seule Katia peut la modifier.</p>
+      <div class="data-list" id="zoneCours"><div class="empty-state">...</div></div>
+    </div>
   </div>
 
-  <!-- Sections repliables : titre visible, contenu masqué par défaut -->
-
-  <div class="app-panel">
-    <div class="panel-toggle" data-target="panelProfil">
+  <!-- ==================== MON PROFIL ==================== -->
+  <div id="panel-profil" class="tab-panel hidden">
+    <div class="app-panel">
       <h2>Mon profil</h2>
-      <span class="panel-chevron">▾</span>
-    </div>
-    <div class="panel-body collapsed" id="panelProfil">
       <p style="color:var(--slate); font-size:0.85rem; margin-bottom:14px;">
         Vos coordonnées. Katia peut les voir, mais seule elle peut modifier votre abonnement et vos paiements.
       </p>
@@ -78,12 +89,10 @@
     </div>
   </div>
 
-  <div class="app-panel">
-    <div class="panel-toggle" data-target="panelChiens">
+  <!-- ==================== MON CHIEN ==================== -->
+  <div id="panel-chien" class="tab-panel hidden">
+    <div class="app-panel">
       <h2>Mon chien</h2>
-      <span class="panel-chevron">▾</span>
-    </div>
-    <div class="panel-body collapsed" id="panelChiens">
       <p style="color:var(--slate); font-size:0.85rem; margin-bottom:14px;">
         Vous pouvez ajouter plusieurs chiens. En cas de décès, archivez le chien concerné plutôt que de le supprimer — ses informations resteront conservées.
       </p>
@@ -92,22 +101,26 @@
     </div>
   </div>
 
-  <div class="app-panel">
-    <div class="panel-toggle" data-target="panelServices">
+  <!-- ==================== SERVICES ==================== -->
+  <div id="panel-services" class="tab-panel hidden">
+    <div class="app-panel">
       <h2>Services</h2>
-      <span class="panel-chevron">▾</span>
-    </div>
-    <div class="panel-body collapsed" id="panelServices">
       <div id="zoneServices"><div class="empty-state">...</div></div>
     </div>
   </div>
 
-  <div class="app-panel">
-    <div class="panel-toggle" data-target="panelMessages">
-      <h2>Message à Katia</h2>
-      <span class="panel-chevron">▾</span>
+  <!-- ==================== BLOG ==================== -->
+  <div id="panel-blog" class="tab-panel hidden">
+    <div class="app-panel">
+      <h2>Le blog du club</h2>
+      <div class="data-list" id="zoneBlog"><div class="empty-state">...</div></div>
     </div>
-    <div class="panel-body collapsed" id="panelMessages">
+  </div>
+
+  <!-- ==================== MESSAGES ==================== -->
+  <div id="panel-messages" class="tab-panel hidden">
+    <div class="app-panel">
+      <h2>Message à Katia</h2>
       <div class="chat-thread" id="chatThreadMembre"><div class="empty-state">...</div></div>
       <div class="chat-input-row">
         <input type="text" id="chatInputMembre" placeholder="Écrire un message...">
@@ -116,32 +129,17 @@
     </div>
   </div>
 
-  <div class="app-panel">
-    <div class="panel-toggle" data-target="panelRdv">
+  <!-- ==================== RDV ==================== -->
+  <div id="panel-rdv" class="tab-panel hidden">
+    <div class="app-panel">
       <h2>RDV du club</h2>
-      <span class="panel-chevron">▾</span>
-    </div>
-    <div class="panel-body collapsed" id="panelRdv">
       <div class="data-list" id="zoneRdv"><div class="empty-state">...</div></div>
     </div>
   </div>
 
-  <div class="app-panel">
-    <div class="panel-toggle" data-target="panelVideos">
-      <h2>Vidéos d'apprentissage</h2>
-      <span class="panel-chevron">▾</span>
-    </div>
-    <div class="panel-body collapsed" id="panelVideos">
-      <div class="data-list" id="zoneVideos"><div class="empty-state">...</div></div>
-    </div>
-  </div>
-
-  <div class="app-panel">
-    <div class="panel-toggle" data-target="panelBoutique">
-      <h2>Boutique</h2>
-      <span class="panel-chevron">▾</span>
-    </div>
-    <div class="panel-body collapsed" id="panelBoutique">
+  <!-- ==================== BOUTIQUE ==================== -->
+  <div id="panel-boutique" class="tab-panel hidden">
+    <div class="app-panel">
       <h3>Articles disponibles</h3>
       <div class="data-list" id="zoneArticlesBoutique"><div class="empty-state">...</div></div>
 
@@ -155,12 +153,23 @@
     </div>
   </div>
 
-  <div class="app-panel">
-    <div class="panel-toggle" data-target="panelPaiements">
-      <h2>Historique de mes paiements</h2>
-      <span class="panel-chevron">▾</span>
+  <!-- ==================== VIDÉOS ==================== -->
+  <div id="panel-videos" class="tab-panel hidden">
+    <div class="app-panel">
+      <h2>Vidéos d'apprentissage</h2>
+      <div class="data-list" id="zoneVideos"><div class="empty-state">...</div></div>
     </div>
-    <div class="panel-body collapsed" id="panelPaiements">
+  </div>
+
+  <!-- ==================== HISTORIQUE ==================== -->
+  <div id="panel-historique" class="tab-panel hidden">
+    <div class="app-panel">
+      <h2>Historique de mes présences</h2>
+      <p style="color:var(--slate); font-size:0.85rem; margin-bottom:14px;">Les cours marqués "non répondu" ont été comptabilisés dans votre abonnement.</p>
+      <div class="data-list" id="zonePresences"><div class="empty-state">...</div></div>
+    </div>
+    <div class="app-panel">
+      <h2>Historique de mes paiements</h2>
       <div class="data-list" id="zonePaiements"><div class="empty-state">...</div></div>
     </div>
   </div>
@@ -168,14 +177,17 @@
 </main>
 
 <script>
-  document.querySelectorAll('.panel-toggle').forEach(t => {
-    t.addEventListener('click', () => {
-      const body = document.getElementById(t.dataset.target);
-      const vaSouvrir = body.classList.contains('collapsed');
-      body.classList.toggle('collapsed');
-      t.classList.toggle('open');
-      if (vaSouvrir && t.dataset.target === 'panelMessages' && window.marquerMessagesLusDepuisAccordeon) {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+      btn.classList.add('active');
+      document.getElementById('panel-' + btn.dataset.tab).classList.remove('hidden');
+      if (btn.dataset.tab === 'messages' && window.marquerMessagesLusDepuisAccordeon) {
         window.marquerMessagesLusDepuisAccordeon();
+      }
+      if (btn.dataset.tab === 'blog' && window.marquerBlogLu) {
+        window.marquerBlogLu();
       }
     });
   });

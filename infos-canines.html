@@ -47,9 +47,11 @@
 </section>
 
 <section>
-  <div class="container">
-    <div class="data-list" id="listeArticlesPublic" style="max-width:760px; margin:0 auto;">
-      <div class="empty-state">Chargement...</div>
+  <div class="container" style="max-width:600px; text-align:center;">
+    <div class="app-panel">
+      <h2>Réservé aux membres</h2>
+      <p style="color:var(--slate); margin-bottom:20px;">Le blog du club est désormais accessible depuis votre espace membre, une fois connecté.</p>
+      <a href="connexion.html" class="btn-sm primary" style="display:inline-block; text-decoration:none;">Se connecter</a>
     </div>
   </div>
 </section>
@@ -95,34 +97,6 @@
     const isOpen = nav.classList.toggle('open');
     toggle.setAttribute('aria-expanded', isOpen);
   });
-</script>
-<script type="module">
-  import { db, collection, getDocs } from "./assets/firebase-config.js";
-
-  function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  }
-
-  (async () => {
-    const snap = await getDocs(collection(db, 'articles'));
-    const articles = [];
-    snap.forEach(d => articles.push({ id: d.id, ...d.data() }));
-    articles.sort((a, b) => (b.datePublication || '').localeCompare(a.datePublication || ''));
-
-    const wrap = document.getElementById('listeArticlesPublic');
-    if (articles.length === 0) {
-      wrap.innerHTML = '<div class="empty-state">Aucun article publié pour l\'instant — revenez bientôt !</div>';
-      return;
-    }
-    wrap.innerHTML = articles.map(a => `
-      <div class="app-panel">
-        ${a.image ? `<img src="${escapeHtml(a.image)}" alt="${escapeHtml(a.titre)}" style="width:100%; max-height:320px; object-fit:cover; border-radius:6px; margin-bottom:16px;">` : ''}
-        <h2 style="font-size:1.3rem;">${escapeHtml(a.titre)}</h2>
-        <p style="color:var(--slate); font-size:0.82rem; margin-bottom:12px;">${a.datePublication || ''}</p>
-        <p style="white-space:pre-wrap;">${escapeHtml(a.contenu)}</p>
-      </div>`).join('');
-  })();
 </script>
 </body>
 </html>
