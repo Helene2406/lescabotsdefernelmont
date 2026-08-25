@@ -20,7 +20,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V32';
+const VERSION_SITE = 'V33';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
@@ -1694,12 +1694,15 @@ async function chargerAbonnementsARenouveler() {
 
 
 // ==========================================================================
-// ABSENCES AUTOMATIQUES — traite les réponses manquantes après le délai de
-// 24h (créées côté membre) : décompte le cours de l'abonnement, une seule
-// fois par absence (seul l'admin a le droit d'écriture sur coursRestants).
+// DÉCOMPTE DES COURS — traite les réponses "présent" et les absences
+// automatiques (pas de réponse dans les 24h) : décompte le cours de
+// l'abonnement, une seule fois par cours (via le champ compteAbonnement),
+// jamais sous 0 (seul l'admin a le droit d'écriture sur coursRestants).
+// L'ordre de traitement n'a pas d'importance : chaque présence n'est
+// décomptée qu'une seule fois, indépendamment des autres.
 // ==========================================================================
 async function traiterAbsencesAutomatiques() {
-  const presSnap = await getDocs(query(collection(db, 'presences'), where('statut', '==', 'absent-auto')));
+  const presSnap = await getDocs(query(collection(db, 'presences'), where('statut', 'in', ['present', 'absent-auto'])));
   const aTraiter = [];
   presSnap.forEach(d => {
     const p = d.data();
