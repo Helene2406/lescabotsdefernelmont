@@ -20,7 +20,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V33';
+const VERSION_SITE = 'V34';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
@@ -913,6 +913,7 @@ async function chargerCeSoir() {
         ${pasAssez ? `<div class="banner-alert" style="margin-top:8px; padding:8px 12px; background:#FBEAEA;border-color:#E3B4B4;color:#8A2E2E;">⚠️ Seulement ${presencesJour.present} confirmation(s) sur les ${MIN_PARTICIPANTS} minimum requises — le cours devra être annulé faute de participants si ça n'évolue pas.</div>` : ''}
       </div>
       <div class="data-actions">
+        <button class="btn-sm" onclick="window.voirMembresCours('${g.id}','${dateISO}')">Membres</button>
         ${annule
           ? `<button class="btn-sm" onclick="window.reactiverCours('${g.id}','${dateISO}')">Réactiver</button>`
           : `
@@ -931,6 +932,47 @@ async function chargerCeSoir() {
 }
 
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+window.voirMembresCours = async (groupeId, dateISO) => {
+  const groupe = currentGroupes.find(g => g.id === groupeId);
+  const membresDuGroupe = currentMembres.filter(m => m.groupeId === groupeId);
+
+  const presSnap = await getDocs(query(collection(db, 'presences'), where('groupeId', '==', groupeId), where('dateISO', '==', dateISO)));
+  const reponses = {};
+  presSnap.forEach(d => { reponses[d.data().uid] = d.data(); });
+
+  const dateLabel = new Date(dateISO + 'T00:00:00').toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  const lignes = membresDuGroupe.map(m => {
+    const r = reponses[m.id];
+    let badge;
+    if (!r) badge = '<span class="badge badge-neutral">N\'a pas encore répondu</span>';
+    else if (r.statut === 'present') badge = '<span class="badge badge-ok">Présent</span>';
+    else if (r.statut === 'absent-auto') badge = '<span class="badge badge-warn">Absent — non répondu (décompté)</span>';
+    else badge = '<span class="badge badge-neutral">Absent (signalé)</span>';
+    return `
+      <div class="data-row">
+        <div class="data-main">
+          <div class="data-title">${escapeHtml(m.nomMaitre)}${nomsChiensActifs(m) ? ' — ' + escapeHtml(nomsChiensActifs(m)) : ''}</div>
+          <div class="data-sub">${badge}</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  const html = `
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-box">
+        <h3>${escapeHtml(groupe?.nom || '')} — ${capitalize(dateLabel)}</h3>
+        <div class="data-list">
+          ${lignes || '<div class="empty-state">Aucun membre dans ce groupe.</div>'}
+        </div>
+        <div class="modal-actions">
+          <button class="btn-sm" onclick="window.fermerModal()">Fermer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+};
 
 window.validerCoursSemaine = async (groupeId, dateISO) => {
   await setDoc(doc(db, 'confirmations', `${groupeId}_${dateISO}`), {
@@ -1930,10 +1972,17 @@ async function chargerCommandesAdmin() {
         ` : ''}
         ${c.statut === 'validee' && !c.numeroFacture ? `<button class="btn-sm primary" onclick="window.facturerCommande('${c.id}')">Générer la facture</button>` : ''}
         ${c.numeroFacture ? `<button class="btn-sm" onclick="window.envoyerFactureParMail('${c.membreId}','${c.numeroFacture}')">Envoyer par mail</button>` : ''}
+        <button class="btn-sm danger" onclick="window.supprimerCommande('${c.id}')">Supprimer</button>
       </div>
     </div>`;
   }).join('');
 }
+
+window.supprimerCommande = async (commandeId) => {
+  if (!confirm('Supprimer définitivement cette commande ? Cette action ne peut pas être annulée (le stock ne sera pas modifié).')) return;
+  await deleteDoc(doc(db, 'commandes', commandeId));
+  chargerCommandesAdmin();
+};
 
 window.validerCommande = async (commandeId) => {
   const commande = (await getDoc(doc(db, 'commandes', commandeId))).data();
@@ -2197,23 +2246,31 @@ window.envoyerFactureParMail = (membreId, numero) => {
 };
 
 window.facturerCommande = async (commandeId) => {
-  const commande = (await getDoc(doc(db, 'commandes', commandeId))).data();
-  const membre = currentMembres.find(m => m.id === commande.membreId);
-  const lignes = (commande.lignes || []).map(l => ({ description: l.nom, quantite: l.quantite, prixUnitaireTTC: l.prixUnitaire }));
-  const numero = await genererFacture({ membre, lignes, type: 'commande', refId: commandeId });
-  if (numero) {
-    await updateDoc(doc(db, 'commandes', commandeId), { numeroFacture: numero });
-    chargerCommandesAdmin();
+  try {
+    const commande = (await getDoc(doc(db, 'commandes', commandeId))).data();
+    const membre = currentMembres.find(m => m.id === commande.membreId);
+    const lignes = (commande.lignes || []).map(l => ({ description: l.nom, quantite: l.quantite, prixUnitaireTTC: l.prixUnitaire }));
+    const numero = await genererFacture({ membre, lignes, type: 'commande', refId: commandeId });
+    if (numero) {
+      await updateDoc(doc(db, 'commandes', commandeId), { numeroFacture: numero });
+      chargerCommandesAdmin();
+    }
+  } catch (err) {
+    alert('Erreur lors de la génération de la facture : ' + (err.message || err) + '\n\nVérifie que ton navigateur n\'a pas bloqué le téléchargement (souvent affiché en haut de la fenêtre).');
   }
 };
 
 window.facturerPaiement = async (paiementId) => {
-  const paiement = (await getDoc(doc(db, 'paiements', paiementId))).data();
-  const membre = currentMembres.find(m => m.id === paiement.membreId);
-  const lignes = [{ description: `${paiement.type}${paiement.note ? ' — ' + paiement.note : ''}`, quantite: 1, prixUnitaireTTC: paiement.montant }];
-  const numero = await genererFacture({ membre, lignes, type: 'paiement', refId: paiementId });
-  if (numero) {
-    await updateDoc(doc(db, 'paiements', paiementId), { numeroFacture: numero });
-    chargerHistoriquePaiements(paiement.membreId);
+  try {
+    const paiement = (await getDoc(doc(db, 'paiements', paiementId))).data();
+    const membre = currentMembres.find(m => m.id === paiement.membreId);
+    const lignes = [{ description: `${paiement.type}${paiement.note ? ' — ' + paiement.note : ''}`, quantite: 1, prixUnitaireTTC: paiement.montant }];
+    const numero = await genererFacture({ membre, lignes, type: 'paiement', refId: paiementId });
+    if (numero) {
+      await updateDoc(doc(db, 'paiements', paiementId), { numeroFacture: numero });
+      chargerHistoriquePaiements(paiement.membreId);
+    }
+  } catch (err) {
+    alert('Erreur lors de la génération de la facture : ' + (err.message || err) + '\n\nVérifie que ton navigateur n\'a pas bloqué le téléchargement (souvent affiché en haut de la fenêtre).');
   }
 };
