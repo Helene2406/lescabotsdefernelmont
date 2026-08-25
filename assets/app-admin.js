@@ -20,7 +20,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V28';
+const VERSION_SITE = 'V30';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
@@ -276,10 +276,16 @@ function remplirSelectGroupes() {
 // ==========================================================================
 // MEMBRES
 // ==========================================================================
+let currentMembresArchives = [];
+
 async function chargerMembres() {
   const snap = await getDocs(query(collection(db, 'membres'), where('role', '==', 'membre')));
   currentMembres = [];
-  snap.forEach(d => { if (!d.data().archive) currentMembres.push({ id: d.id, ...d.data() }); });
+  currentMembresArchives = [];
+  snap.forEach(d => {
+    const m = { id: d.id, ...d.data() };
+    if (m.archive) currentMembresArchives.push(m); else currentMembres.push(m);
+  });
   renderMembres();
   renderGroupes();
 }
@@ -295,7 +301,16 @@ function renderMembres() {
     wrap.innerHTML = '<div class="empty-state">Aucun membre pour l\'instant.</div>';
     return;
   }
-  wrap.innerHTML = currentMembres.map(m => {
+  const terme = (document.getElementById('rechercheMembre')?.value || '').trim().toLowerCase();
+  const membresAffiches = !terme ? currentMembres : currentMembres.filter(m =>
+    (m.nomMaitre || '').toLowerCase().includes(terme) ||
+    nomsChiensActifs(m).toLowerCase().includes(terme)
+  );
+  if (membresAffiches.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucun membre ne correspond à cette recherche.</div>';
+    return;
+  }
+  wrap.innerHTML = membresAffiches.map(m => {
     const groupe = currentGroupes.find(g => g.id === m.groupeId);
     const badgeAbo = m.abonnementPaye
       ? `<span class="badge badge-ok">${m.coursRestants ?? 0} cours restants</span>`
@@ -320,6 +335,7 @@ function renderMembres() {
 }
 
 document.getElementById('btnAjouterMembre').addEventListener('click', () => ouvrirModalMembre());
+document.getElementById('rechercheMembre').addEventListener('input', () => renderMembres());
 
 document.getElementById('btnImportMembres').addEventListener('click', () => ouvrirModalImportMembres());
 
@@ -411,6 +427,36 @@ window.archiverMembre = async (id) => {
   chargerMembres().then(() => { chargerConversations(); chargerAnniversaires(); chargerCotisationsARenouveler(); chargerAbonnementsARenouveler(); chargerVaccinsARappeler(); });
 };
 
+window.reactiverMembre = async (id) => {
+  await updateDoc(doc(db, 'membres', id), { archive: false });
+  chargerMembres().then(() => { chargerConversations(); chargerAnniversaires(); chargerCotisationsARenouveler(); chargerAbonnementsARenouveler(); chargerVaccinsARappeler(); renderMembresArchives(); });
+};
+
+function renderMembresArchives() {
+  const wrap = document.getElementById('listeMembresArchives');
+  if (currentMembresArchives.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucun membre archivé.</div>';
+    return;
+  }
+  wrap.innerHTML = currentMembresArchives.map(m => `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(m.nomMaitre)}${nomsChiensActifs(m) ? ' — ' + escapeHtml(nomsChiensActifs(m)) : ''}</div>
+        <div class="data-sub">Identifiant : <strong>${escapeHtml(m.identifiant || '—')}</strong></div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm primary" onclick="window.reactiverMembre('${m.id}')">Remettre actif</button>
+      </div>
+    </div>`).join('');
+}
+
+document.getElementById('btnVoirArchives').addEventListener('click', () => {
+  const wrap = document.getElementById('listeMembresArchives');
+  const visible = wrap.style.display !== 'none';
+  wrap.style.display = visible ? 'none' : 'block';
+  if (!visible) renderMembresArchives();
+});
+
 function optionsMarqueVaccin(valeurActuelle) {
   return ['', 'Eurican', 'Versican', 'Nobivac', 'Autres'].map(m =>
     `<option value="${m}" ${valeurActuelle === m ? 'selected' : ''}>${m || '—'}</option>`
@@ -484,7 +530,10 @@ function ouvrirModalMembre(membre) {
         ${isEdit ? `
         <h3 style="margin-top:18px;">Paiements</h3>
         <button class="btn-sm" type="button" onclick="window.ouvrirModalPaiement('${membre.id}')">+ Enregistrer un paiement</button>
-        <div id="mm-historiquePaiements" style="margin-top:10px;"><div class="empty-state">Chargement...</div></div>
+        <div id="mm-historiquePaiements" style="margin-top:10px;"><div class="empty-state">...</div></div>
+
+        <h3 style="margin-top:18px;">Historique de présence</h3>
+        <div id="mm-historiquePresences" style="margin-top:10px; max-height:220px; overflow-y:auto;"><div class="empty-state">...</div></div>
         ` : ''}
 
         <div class="modal-actions">
@@ -496,7 +545,7 @@ function ouvrirModalMembre(membre) {
   document.getElementById('modalZone').innerHTML = html;
   remplirSelectGroupes();
   if (isEdit && membre.groupeId) document.getElementById('mm-groupe').value = membre.groupeId;
-  if (isEdit) chargerHistoriquePaiements(membre.id);
+  if (isEdit) { chargerHistoriquePaiements(membre.id); chargerHistoriquePresencesAdmin(membre.id); }
 
   document.getElementById('mm-save').addEventListener('click', async () => {
     const btnSave = document.getElementById('mm-save');
@@ -706,11 +755,41 @@ async function chargerHistoriquePaiements(membreId) {
       <div class="data-main">
         <div class="data-title">${escapeHtml(p.type)} — ${Number(p.montant).toFixed(2)} € TTC</div>
         <div class="data-sub">${p.date || ''}${p.note ? ' · ' + escapeHtml(p.note) : ''}</div>
+        ${p.numeroFacture ? `<div class="data-sub">Facture n° <strong>${escapeHtml(p.numeroFacture)}</strong></div>` : ''}
       </div>
       <div class="data-actions">
+        ${!p.numeroFacture ? `<button class="btn-sm primary" onclick="window.facturerPaiement('${p.id}')">Générer la facture</button>` : `<button class="btn-sm" onclick="window.envoyerFactureParMail('${membreId}','${p.numeroFacture}')">Envoyer par mail</button>`}
         <button class="btn-sm danger" onclick="window.supprimerPaiement('${p.id}', '${membreId}')">Supprimer</button>
       </div>
     </div>`).join('');
+}
+
+async function chargerHistoriquePresencesAdmin(membreId) {
+  const zone = document.getElementById('mm-historiquePresences');
+  if (!zone) return;
+  const snap = await getDocs(query(collection(db, 'presences'), where('uid', '==', membreId)));
+  const presences = [];
+  snap.forEach(d => presences.push(d.data()));
+  presences.sort((a, b) => (b.dateISO || '').localeCompare(a.dateISO || ''));
+
+  if (presences.length === 0) {
+    zone.innerHTML = '<div class="empty-state">Aucun historique pour l\'instant.</div>';
+    return;
+  }
+  zone.innerHTML = presences.map(p => {
+    const g = currentGroupes.find(gr => gr.id === p.groupeId);
+    let badge;
+    if (p.statut === 'present') badge = '<span class="badge badge-ok">Présent(e)</span>';
+    else if (p.statut === 'absent-auto') badge = '<span class="badge badge-warn">Non répondu — décompté</span>';
+    else badge = '<span class="badge badge-neutral">Absent(e) (signalé)</span>';
+    return `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${p.dateISO || ''} — ${g ? escapeHtml(g.nom) : '?'}</div>
+        <div class="data-sub">${badge}</div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 window.ouvrirModalPaiement = (membreId) => {
@@ -722,6 +801,11 @@ window.ouvrirModalPaiement = (membreId) => {
           <select id="pay-type">
             <option value="Cotisation">Cotisation</option>
             <option value="Abonnement">Abonnement</option>
+            <option value="Cours individuel">Cours individuel</option>
+            <option value="Séance de comportement">Séance de comportement</option>
+            <option value="Pension canine">Pension canine</option>
+            <option value="Toilettage">Toilettage</option>
+            <option value="Vente diverse">Vente diverse</option>
             <option value="Autre">Autre</option>
           </select>
         </div>
@@ -1234,14 +1318,21 @@ async function chargerConversations() {
   const ordonne = [...membresAvecConv.sort((a, b) => (convs[b.id]?.dateDernierMessage || '').localeCompare(convs[a.id]?.dateDernierMessage || '')), ...autresMembres];
 
   let unReadTotal = 0;
+  ordonne.forEach(m => { if (convs[m.id]?.nonLuAdmin) unReadTotal++; });
+  const tabBtn = document.getElementById('tabMessagesBtn');
+  tabBtn.classList.toggle('has-unread', unReadTotal > 0);
 
-  if (ordonne.length === 0) {
-    wrap.innerHTML = '<div class="empty-state">Aucun membre pour l\'instant.</div>';
+  const terme = (document.getElementById('rechercheMessage')?.value || '').trim().toLowerCase();
+  const ordonneAffiches = !terme ? ordonne : ordonne.filter(m =>
+    (m.nomMaitre || '').toLowerCase().includes(terme) || nomsChiensActifs(m).toLowerCase().includes(terme)
+  );
+
+  if (ordonneAffiches.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucun membre ne correspond à cette recherche.</div>';
   } else {
-    wrap.innerHTML = ordonne.map(m => {
+    wrap.innerHTML = ordonneAffiches.map(m => {
       const c = convs[m.id];
       const nonLu = c?.nonLuAdmin;
-      if (nonLu) unReadTotal++;
       return `
       <div class="data-row" style="cursor:pointer;" onclick="window.ouvrirConversation('${m.id}')">
         <div class="data-main">
@@ -1252,9 +1343,6 @@ async function chargerConversations() {
       </div>`;
     }).join('');
   }
-
-  const tabBtn = document.getElementById('tabMessagesBtn');
-  tabBtn.classList.toggle('has-unread', unReadTotal > 0);
 }
 
 window.ouvrirConversation = async (uid) => {
@@ -1311,6 +1399,7 @@ async function envoyerMessageAdmin(uid) {
   window.ouvrirConversation(uid);
 }
 
+document.getElementById('rechercheMessage').addEventListener('input', () => chargerConversations());
 document.getElementById('btnMessageGroupe').addEventListener('click', () => {
   const html = `
     <div class="modal-overlay" id="modalOverlay">
@@ -1689,9 +1778,11 @@ function renderArticlesBoutiqueAdmin() {
   }
   wrap.innerHTML = currentArticlesBoutique.map(a => `
     <div class="data-row">
+      ${a.photoURL ? `<img src="${escapeAttr(a.photoURL)}" style="width:52px; height:52px; border-radius:6px; object-fit:cover; flex:none;">` : ''}
       <div class="data-main">
         <div class="data-title">${escapeHtml(a.nom)} ${!a.actif ? '<span class="badge badge-neutral">Masqué</span>' : ''}</div>
         <div class="data-sub">${Number(a.prix).toFixed(2)} € TTC · <span class="${a.stock <= 0 ? 'badge badge-danger' : 'badge badge-ok'}">${a.stock} en stock</span></div>
+        <div class="data-sub">${a.reference ? `Réf. ${escapeHtml(a.reference)}` : ''}${a.poids ? ` · ${a.poids} g` : ''}</div>
       </div>
       <div class="data-actions">
         <button class="btn-sm" onclick="window.editerArticleBoutique('${a.id}')">Modifier</button>
@@ -1701,6 +1792,7 @@ function renderArticlesBoutiqueAdmin() {
 }
 
 document.getElementById('btnAjouterArticleBoutique').addEventListener('click', () => ouvrirModalArticleBoutique());
+document.getElementById('rechercheCommande').addEventListener('input', () => chargerCommandesAdmin());
 
 window.editerArticleBoutique = (id) => {
   const a = currentArticlesBoutique.find(x => x.id === id);
@@ -1721,6 +1813,10 @@ function ouvrirModalArticleBoutique(article) {
         <h3>${isEdit ? 'Modifier l\'article' : 'Ajouter un article'}</h3>
         <div class="field"><label>Nom</label><input id="ab-nom" value="${isEdit ? escapeAttr(article.nom) : ''}"></div>
         <div class="form-grid">
+          <div class="field"><label>Référence article</label><input id="ab-reference" value="${isEdit ? escapeAttr(article.reference||'') : ''}" placeholder="ex: LAI-CUIR-01"></div>
+          <div class="field"><label>Poids (grammes)</label><input type="number" id="ab-poids" value="${isEdit ? (article.poids ?? '') : ''}" placeholder="ex: 250"></div>
+        </div>
+        <div class="form-grid">
           <div class="field"><label>Prix TTC (€)</label><input type="number" step="0.01" id="ab-prix" value="${isEdit ? article.prix : ''}"></div>
           <div class="field"><label>Stock</label><input type="number" id="ab-stock" value="${isEdit ? article.stock : 0}"></div>
         </div>
@@ -1738,11 +1834,18 @@ function ouvrirModalArticleBoutique(article) {
     </div>`;
   document.getElementById('modalZone').innerHTML = html;
   document.getElementById('ab-save').addEventListener('click', async () => {
+    const btnSave = document.getElementById('ab-save');
+    btnSave.disabled = true;
     const nom = document.getElementById('ab-nom').value.trim();
     const prix = parseFloat(document.getElementById('ab-prix').value);
     const stock = parseInt(document.getElementById('ab-stock').value, 10);
-    if (!nom || isNaN(prix) || isNaN(stock)) { alert('Merci de remplir nom, prix et stock.'); return; }
-    const data = { nom, prix, stock, actif: document.getElementById('ab-actif').value === 'oui' };
+    if (!nom || isNaN(prix) || isNaN(stock)) { alert('Merci de remplir nom, prix et stock.'); btnSave.disabled = false; return; }
+    const data = {
+      nom, prix, stock,
+      reference: document.getElementById('ab-reference').value.trim(),
+      poids: document.getElementById('ab-poids').value ? parseInt(document.getElementById('ab-poids').value, 10) : null,
+      actif: document.getElementById('ab-actif').value === 'oui'
+    };
     if (isEdit) {
       await updateDoc(doc(db, 'articles_boutique', article.id), data);
     } else {
@@ -1781,7 +1884,17 @@ async function chargerCommandesAdmin() {
     return;
   }
 
-  wrap.innerHTML = commandes.map(c => {
+  const terme = (document.getElementById('rechercheCommande')?.value || '').trim().toLowerCase();
+  const commandesAffichees = !terme ? commandes : commandes.filter(c => {
+    const membre = currentMembres.find(m => m.id === c.membreId);
+    return membre && ((membre.nomMaitre || '').toLowerCase().includes(terme) || nomsChiensActifs(membre).toLowerCase().includes(terme));
+  });
+  if (commandesAffichees.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucune commande ne correspond à cette recherche.</div>';
+    return;
+  }
+
+  wrap.innerHTML = commandesAffichees.map(c => {
     const membre = currentMembres.find(m => m.id === c.membreId);
     const detailLignes = (c.lignes || []).map(l => `${l.quantite} × ${escapeHtml(l.nom)}`).join(', ');
     const badgeStatut = c.statut === 'validee' ? '<span class="badge badge-ok">Validée</span>'
@@ -1792,19 +1905,15 @@ async function chargerCommandesAdmin() {
       <div class="data-main">
         <div class="data-title">${escapeHtml(membre?.nomMaitre || '?')}${membre && nomsChiensActifs(membre) ? ' — ' + escapeHtml(nomsChiensActifs(membre)) : ''} — ${Number(c.total).toFixed(2)} € TTC ${badgeStatut}</div>
         <div class="data-sub">${detailLignes}</div>
-        ${c.numeroFacture ? `<div class="data-sub">N° facture compta : <strong>${escapeHtml(c.numeroFacture)}</strong></div>` : ''}
-        ${c.statut === 'validee' ? `
-          <div class="form-grid" style="margin-top:8px; max-width:320px;">
-            <div class="field"><label>N° de facture compta</label><input id="fact-${c.id}" value="${escapeAttr(c.numeroFacture||'')}" placeholder="ex: FA2026-042"></div>
-          </div>
-          <button class="btn-sm" onclick="window.enregistrerNumeroFacture('${c.id}')">Enregistrer le n°</button>
-        ` : ''}
+        ${c.numeroFacture ? `<div class="data-sub">Facture n° <strong>${escapeHtml(c.numeroFacture)}</strong></div>` : ''}
       </div>
       <div class="data-actions">
         ${c.statut === 'en_attente' ? `
           <button class="btn-sm primary" onclick="window.validerCommande('${c.id}')">Valider (décompte le stock)</button>
           <button class="btn-sm danger" onclick="window.annulerCommande('${c.id}')">Annuler</button>
         ` : ''}
+        ${c.statut === 'validee' && !c.numeroFacture ? `<button class="btn-sm primary" onclick="window.facturerCommande('${c.id}')">Générer la facture</button>` : ''}
+        ${c.numeroFacture ? `<button class="btn-sm" onclick="window.envoyerFactureParMail('${c.membreId}','${c.numeroFacture}')">Envoyer par mail</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -1847,3 +1956,248 @@ setTimeout(() => {
     }
   });
 }, 7000);
+
+// ==========================================================================
+// FACTURATION — numérotation séquentielle, PDF légal, export UBL/XML
+// (compatible import "factures électroniques" d'Octopus), historique.
+//
+// ⚠️ Ceci génère un document structuré correctement, mais je ne suis pas
+// comptable ni juriste : avant le premier envoi réel à un client, fais
+// vérifier un exemplaire par ta fiduciaire (numérotation, mentions TVA,
+// et compatibilité de l'import UBL avec ton dossier Octopus).
+// ==========================================================================
+
+const ENTREPRISE = {
+  nom: 'LES BEAUX CABOTS SRL',
+  enseigne: 'Les Cabots de Fernelmont',
+  adresse: 'Rue Grande 26',
+  codePostal: '4219',
+  ville: 'Wasseiges (Meeffe)',
+  pays: 'Belgique',
+  tva: 'BE0729593814',
+  email: 'cabotsdefernelmont@gmail.com',
+  tel: '0032 494 05 17 96'
+};
+const TAUX_TVA = 21;
+
+async function prochainNumeroFacture() {
+  const refDoc = doc(db, 'parametres', 'facturation');
+  const snap = await getDoc(refDoc);
+  const annee = new Date().getFullYear();
+  let compteur = 1;
+  if (snap.exists() && snap.data().annee === annee) {
+    compteur = (snap.data().dernierNumero || 0) + 1;
+  }
+  await setDoc(refDoc, { annee, dernierNumero: compteur });
+  return `${annee}-${String(compteur).padStart(4, '0')}`;
+}
+
+// lignes : [{ description, quantite, prixUnitaireTTC }]
+async function genererFacture({ membre, lignes, type, refId }) {
+  if (!membre) { alert('Membre introuvable.'); return; }
+  const numero = await prochainNumeroFacture();
+  const dateEmission = dateISOLocale(new Date());
+
+  const lignesCalc = lignes.map(l => {
+    const totalTTC = l.quantite * l.prixUnitaireTTC;
+    const totalHT = totalTTC / (1 + TAUX_TVA / 100);
+    return { ...l, totalTTC, totalHT };
+  });
+  const totalTTC = lignesCalc.reduce((s, l) => s + l.totalTTC, 0);
+  const totalHT = lignesCalc.reduce((s, l) => s + l.totalHT, 0);
+  const totalTVA = totalTTC - totalHT;
+
+  await addDoc(collection(db, 'factures'), {
+    numero, membreId: membre.id, type, refId,
+    dateEmission, lignes: lignesCalc, totalHT, totalTVA, totalTTC,
+    creeLe: serverTimestamp()
+  });
+
+  telechargerFacturePDF({ numero, dateEmission, membre, lignesCalc, totalHT, totalTVA, totalTTC });
+  telechargerFactureUBL({ numero, dateEmission, membre, lignesCalc, totalHT, totalTVA, totalTTC });
+
+  return numero;
+}
+
+function telechargerFacturePDF({ numero, dateEmission, membre, lignesCalc, totalHT, totalTVA, totalTTC }) {
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF();
+  let y = 20;
+
+  pdf.setFontSize(16); pdf.setFont(undefined, 'bold');
+  pdf.text(ENTREPRISE.nom, 15, y);
+  pdf.setFontSize(10); pdf.setFont(undefined, 'normal');
+  y += 6; pdf.text(ENTREPRISE.enseigne, 15, y);
+  y += 5; pdf.text(`${ENTREPRISE.adresse}, ${ENTREPRISE.codePostal} ${ENTREPRISE.ville}`, 15, y);
+  y += 5; pdf.text(`TVA ${ENTREPRISE.tva}`, 15, y);
+  y += 5; pdf.text(`${ENTREPRISE.email} — ${ENTREPRISE.tel}`, 15, y);
+
+  pdf.setFontSize(14); pdf.setFont(undefined, 'bold');
+  pdf.text('FACTURE', 150, 20);
+  pdf.setFontSize(10); pdf.setFont(undefined, 'normal');
+  pdf.text(`N° ${numero}`, 150, 27);
+  pdf.text(`Date : ${new Date(dateEmission + 'T00:00:00').toLocaleDateString('fr-BE')}`, 150, 32);
+
+  y = 55;
+  pdf.setFont(undefined, 'bold'); pdf.text('Client', 15, y); pdf.setFont(undefined, 'normal');
+  y += 6; pdf.text(membre.nomMaitre || '', 15, y);
+  if (membre.adressePostale) { y += 5; pdf.text(membre.adressePostale, 15, y); }
+  if (membre.email) { y += 5; pdf.text(membre.email, 15, y); }
+
+  y += 12;
+  pdf.setFillColor(27, 58, 92);
+  pdf.rect(15, y, 180, 8, 'F');
+  pdf.setTextColor(255, 255, 255); pdf.setFont(undefined, 'bold'); pdf.setFontSize(9);
+  pdf.text('Description', 18, y + 5.5);
+  pdf.text('Qté', 120, y + 5.5);
+  pdf.text('PU TTC', 140, y + 5.5);
+  pdf.text('Total TTC', 168, y + 5.5);
+  pdf.setTextColor(0, 0, 0); pdf.setFont(undefined, 'normal');
+  y += 8;
+
+  lignesCalc.forEach(l => {
+    y += 8;
+    pdf.text(String(l.description).slice(0, 55), 18, y);
+    pdf.text(String(l.quantite), 120, y);
+    pdf.text(l.prixUnitaireTTC.toFixed(2) + ' €', 140, y);
+    pdf.text(l.totalTTC.toFixed(2) + ' €', 168, y);
+  });
+
+  y += 14;
+  pdf.line(120, y, 195, y);
+  y += 6;
+  pdf.text('Total HT :', 140, y); pdf.text(totalHT.toFixed(2) + ' €', 168, y);
+  y += 6;
+  pdf.text(`TVA ${TAUX_TVA}% :`, 140, y); pdf.text(totalTVA.toFixed(2) + ' €', 168, y);
+  y += 6;
+  pdf.setFont(undefined, 'bold');
+  pdf.text('Total TTC :', 140, y); pdf.text(totalTTC.toFixed(2) + ' €', 168, y);
+  pdf.setFont(undefined, 'normal');
+
+  y += 20;
+  pdf.setFontSize(8); pdf.setTextColor(90, 100, 110);
+  pdf.text('Facture soumise aux Conditions Générales de Vente disponibles sur le site du club.', 15, y);
+  y += 5;
+  pdf.text('En cas de retard de paiement, des intérêts de retard légaux sont applicables de plein droit.', 15, y);
+  y += 10;
+  pdf.text(`${ENTREPRISE.nom} — TVA ${ENTREPRISE.tva} — ${ENTREPRISE.adresse}, ${ENTREPRISE.codePostal} ${ENTREPRISE.ville}`, 15, y);
+
+  pdf.save(`Facture_${numero}.pdf`);
+}
+
+function telechargerFactureUBL({ numero, dateEmission, membre, lignesCalc, totalHT, totalTVA, totalTTC }) {
+  const ligneXml = lignesCalc.map((l, i) => `
+  <cac:InvoiceLine>
+    <cbc:ID>${i + 1}</cbc:ID>
+    <cbc:InvoicedQuantity unitCode="C62">${l.quantite}</cbc:InvoicedQuantity>
+    <cbc:LineExtensionAmount currencyID="EUR">${l.totalHT.toFixed(2)}</cbc:LineExtensionAmount>
+    <cac:Item>
+      <cbc:Name>${escaperXml(l.description)}</cbc:Name>
+      <cac:ClassifiedTaxCategory>
+        <cbc:ID>S</cbc:ID>
+        <cbc:Percent>${TAUX_TVA}</cbc:Percent>
+        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+      </cac:ClassifiedTaxCategory>
+    </cac:Item>
+    <cac:Price>
+      <cbc:PriceAmount currencyID="EUR">${(l.prixUnitaireTTC / (1 + TAUX_TVA / 100)).toFixed(4)}</cbc:PriceAmount>
+    </cac:Price>
+  </cac:InvoiceLine>`).join('');
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+         xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+         xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+  <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
+  <cbc:ID>${numero}</cbc:ID>
+  <cbc:IssueDate>${dateEmission}</cbc:IssueDate>
+  <cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode>
+  <cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode>
+  <cac:AccountingSupplierParty>
+    <cac:Party>
+      <cbc:EndpointID schemeID="0208">${ENTREPRISE.tva}</cbc:EndpointID>
+      <cac:PartyName><cbc:Name>${escaperXml(ENTREPRISE.nom)}</cbc:Name></cac:PartyName>
+      <cac:PostalAddress>
+        <cbc:StreetName>${escaperXml(ENTREPRISE.adresse)}</cbc:StreetName>
+        <cbc:CityName>${escaperXml(ENTREPRISE.ville)}</cbc:CityName>
+        <cbc:PostalZone>${ENTREPRISE.codePostal}</cbc:PostalZone>
+        <cac:Country><cbc:IdentificationCode>BE</cbc:IdentificationCode></cac:Country>
+      </cac:PostalAddress>
+      <cac:PartyTaxScheme>
+        <cbc:CompanyID>${ENTREPRISE.tva}</cbc:CompanyID>
+        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+      </cac:PartyTaxScheme>
+    </cac:Party>
+  </cac:AccountingSupplierParty>
+  <cac:AccountingCustomerParty>
+    <cac:Party>
+      <cac:PartyName><cbc:Name>${escaperXml(membre.nomMaitre || '')}</cbc:Name></cac:PartyName>
+      <cac:PostalAddress>
+        <cbc:StreetName>${escaperXml(membre.adressePostale || '')}</cbc:StreetName>
+        <cac:Country><cbc:IdentificationCode>BE</cbc:IdentificationCode></cac:Country>
+      </cac:PostalAddress>
+      ${membre.email ? `<cac:Contact><cbc:ElectronicMail>${escaperXml(membre.email)}</cbc:ElectronicMail></cac:Contact>` : ''}
+    </cac:Party>
+  </cac:AccountingCustomerParty>
+  <cac:TaxTotal>
+    <cbc:TaxAmount currencyID="EUR">${totalTVA.toFixed(2)}</cbc:TaxAmount>
+    <cac:TaxSubtotal>
+      <cbc:TaxableAmount currencyID="EUR">${totalHT.toFixed(2)}</cbc:TaxableAmount>
+      <cbc:TaxAmount currencyID="EUR">${totalTVA.toFixed(2)}</cbc:TaxAmount>
+      <cac:TaxCategory>
+        <cbc:ID>S</cbc:ID>
+        <cbc:Percent>${TAUX_TVA}</cbc:Percent>
+        <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+      </cac:TaxCategory>
+    </cac:TaxSubtotal>
+  </cac:TaxTotal>
+  <cac:LegalMonetaryTotal>
+    <cbc:LineExtensionAmount currencyID="EUR">${totalHT.toFixed(2)}</cbc:LineExtensionAmount>
+    <cbc:TaxExclusiveAmount currencyID="EUR">${totalHT.toFixed(2)}</cbc:TaxExclusiveAmount>
+    <cbc:TaxInclusiveAmount currencyID="EUR">${totalTTC.toFixed(2)}</cbc:TaxInclusiveAmount>
+    <cbc:PayableAmount currencyID="EUR">${totalTTC.toFixed(2)}</cbc:PayableAmount>
+  </cac:LegalMonetaryTotal>
+  ${ligneXml}
+</Invoice>`;
+
+  const blob = new Blob([xml], { type: 'application/xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `Facture_${numero}_UBL.xml`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function escaperXml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
+}
+
+window.envoyerFactureParMail = (membreId, numero) => {
+  const membre = currentMembres.find(m => m.id === membreId);
+  if (!membre?.email) { alert('Ce membre n\'a pas d\'adresse e-mail renseignée dans sa fiche.'); return; }
+  const sujet = encodeURIComponent(`Facture ${numero} — Les Beaux Cabots`);
+  const corps = encodeURIComponent(`Bonjour ${membre.nomMaitre},\n\nVeuillez trouver ci-joint votre facture n° ${numero}.\n\nMerci de joindre le PDF téléchargé juste avant à cet e-mail (le navigateur ne permet pas de le faire automatiquement).\n\nBien à vous,\nKatia — Les Beaux Cabots`);
+  window.location.href = `mailto:${membre.email}?subject=${sujet}&body=${corps}`;
+};
+
+window.facturerCommande = async (commandeId) => {
+  const commande = (await getDoc(doc(db, 'commandes', commandeId))).data();
+  const membre = currentMembres.find(m => m.id === commande.membreId);
+  const lignes = (commande.lignes || []).map(l => ({ description: l.nom, quantite: l.quantite, prixUnitaireTTC: l.prixUnitaire }));
+  const numero = await genererFacture({ membre, lignes, type: 'commande', refId: commandeId });
+  if (numero) {
+    await updateDoc(doc(db, 'commandes', commandeId), { numeroFacture: numero });
+    chargerCommandesAdmin();
+  }
+};
+
+window.facturerPaiement = async (paiementId) => {
+  const paiement = (await getDoc(doc(db, 'paiements', paiementId))).data();
+  const membre = currentMembres.find(m => m.id === paiement.membreId);
+  const lignes = [{ description: `${paiement.type}${paiement.note ? ' — ' + paiement.note : ''}`, quantite: 1, prixUnitaireTTC: paiement.montant }];
+  const numero = await genererFacture({ membre, lignes, type: 'paiement', refId: paiementId });
+  if (numero) {
+    await updateDoc(doc(db, 'paiements', paiementId), { numeroFacture: numero });
+    chargerHistoriquePaiements(paiement.membreId);
+  }
+};

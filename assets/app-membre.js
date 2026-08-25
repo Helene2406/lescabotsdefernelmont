@@ -16,7 +16,7 @@ function dateISOLocale(d) {
   return `${y}-${m}-${j}`;
 }
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
-const VERSION_SITE = 'V28';
+const VERSION_SITE = 'V30';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 
 let membreData = null;
@@ -27,6 +27,12 @@ onAuthStateChanged(auth, async (user) => {
   if (!user) { window.location.href = 'connexion.html'; return; }
   const mDoc = await getDocAvecReessai(doc(db, 'membres', user.uid));
   if (!mDoc.exists() || mDoc.data().role !== 'membre') {
+    window.location.href = 'connexion.html';
+    return;
+  }
+  if (mDoc.data().archive) {
+    alert('Ce compte a été archivé. Contactez Katia si vous pensez qu\'il s\'agit d\'une erreur.');
+    await signOut(auth);
     window.location.href = 'connexion.html';
     return;
   }
@@ -50,6 +56,8 @@ onAuthStateChanged(auth, async (user) => {
   chargerChat();
   afficherAlerteMessage();
   chargerVideosMembre();
+  chargerBlogMembre();
+  chargerHistoriquePresencesMembre();
 });
 
 document.getElementById('chatSendMembre').addEventListener('click', envoyerMessageMembre);
@@ -435,13 +443,16 @@ async function marquerChatLu() {
     await setDoc(doc(db, 'conversations', membreUid), { nonLuMembre: false }, { merge: true });
   }
   document.getElementById('zoneAlerteMessage').innerHTML = '';
+  document.getElementById('tabMessagesBtn')?.classList.remove('has-unread');
   chargerChat();
 }
 
 async function afficherAlerteMessage() {
   const convDoc = await getDoc(doc(db, 'conversations', membreUid));
   const zone = document.getElementById('zoneAlerteMessage');
-  if (convDoc.exists() && convDoc.data().nonLuMembre) {
+  const nonLu = convDoc.exists() && convDoc.data().nonLuMembre;
+  document.getElementById('tabMessagesBtn')?.classList.toggle('has-unread', !!nonLu);
+  if (nonLu) {
     zone.innerHTML = `
       <div class="alerte-message" onclick="window.ouvrirMessagesEtLire()">
         💬 Vous avez un nouveau message de Katia — cliquez pour le lire
@@ -452,13 +463,7 @@ async function afficherAlerteMessage() {
 }
 
 window.ouvrirMessagesEtLire = () => {
-  const toggle = document.querySelector('.panel-toggle[data-target="panelMessages"]');
-  const body = document.getElementById('panelMessages');
-  if (body.classList.contains('collapsed')) {
-    body.classList.remove('collapsed');
-    toggle.classList.add('open');
-  }
-  body.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.querySelector('.tab-btn[data-tab="messages"]').click();
   marquerChatLu();
 };
 
@@ -791,6 +796,7 @@ async function chargerBoutiqueMembre() {
     } else {
       wrap.innerHTML = articles.map(a => `
         <div class="data-row">
+          ${a.photoURL ? `<img src="${escapeHtml(a.photoURL)}" style="width:52px; height:52px; border-radius:6px; object-fit:cover; flex:none;">` : ''}
           <div class="data-main">
             <div class="data-title">${escapeHtml(a.nom)}</div>
             <div class="data-sub">${Number(a.prix).toFixed(2)} € TTC · ${a.stock > 0 ? `${a.stock} en stock` : '<span class="badge badge-danger">Rupture de stock</span>'}</div>
@@ -900,3 +906,66 @@ setTimeout(() => {
     }
   });
 }, 7000);
+
+// ==========================================================================
+// BLOG — lecture seule, avec point rouge sur l'onglet si nouvel article
+// ==========================================================================
+async function chargerBlogMembre() {
+  const snap = await getDocs(collection(db, 'articles'));
+  const articles = [];
+  snap.forEach(d => articles.push({ id: d.id, ...d.data() }));
+  articles.sort((a, b) => (b.datePublication || '').localeCompare(a.datePublication || ''));
+
+  const wrap = document.getElementById('zoneBlog');
+  if (articles.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucun article publié pour l\'instant.</div>';
+  } else {
+    wrap.innerHTML = articles.map(a => `
+      <div class="app-panel" style="margin-bottom:14px;">
+        ${a.image ? `<img src="${escapeHtml(a.image)}" alt="${escapeHtml(a.titre)}" style="width:100%; max-height:260px; object-fit:cover; border-radius:6px; margin-bottom:14px;">` : ''}
+        <h3 style="font-size:1.15rem;">${escapeHtml(a.titre)}</h3>
+        <p style="color:var(--slate); font-size:0.8rem; margin-bottom:10px;">${a.datePublication || ''}</p>
+        <p style="white-space:pre-wrap;">${escapeHtml(a.contenu)}</p>
+      </div>`).join('');
+  }
+
+  const dernierArticle = articles[0]?.datePublication || '';
+  const dernierVu = membreData.dernierBlogVu || '';
+  document.getElementById('tabBlogBtn')?.classList.toggle('has-unread', dernierArticle > dernierVu);
+}
+
+window.marquerBlogLu = async () => {
+  const aujourdhui = dateISOLocale(new Date());
+  await updateDoc(doc(db, 'membres', membreUid), { dernierBlogVu: aujourdhui });
+  membreData.dernierBlogVu = aujourdhui;
+  document.getElementById('tabBlogBtn')?.classList.remove('has-unread');
+};
+
+// ==========================================================================
+// HISTORIQUE DE MES PRÉSENCES
+// ==========================================================================
+async function chargerHistoriquePresencesMembre() {
+  const snap = await getDocs(query(collection(db, 'presences'), where('uid', '==', membreUid)));
+  const presences = [];
+  snap.forEach(d => presences.push(d.data()));
+  presences.sort((a, b) => (b.dateISO || '').localeCompare(a.dateISO || ''));
+
+  const wrap = document.getElementById('zonePresences');
+  if (presences.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucun historique pour l\'instant.</div>';
+    return;
+  }
+  wrap.innerHTML = presences.map(p => {
+    let badge;
+    if (p.statut === 'present') badge = '<span class="badge badge-ok">Présent(e)</span>';
+    else if (p.statut === 'absent-auto') badge = '<span class="badge badge-warn">Non répondu — décompté</span>';
+    else badge = '<span class="badge badge-neutral">Absent(e) (signalé)</span>';
+    return `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${p.dateISO || ''}</div>
+        <div class="data-sub">${badge}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
