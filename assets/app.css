@@ -390,13 +390,10 @@
 .comment-input-row { display: flex; gap: 8px; margin-top: 10px; }
 .comment-input-row input { flex: 1; }
 
-/* Petit jardin secret 🍓 */
-.secret-fraise {
-  position: fixed;
-  font-size: 14px;
-  opacity: 0.12;
-  pointer-events: none;
-  z-index: 5;
+/* Petit jardin secret 🍓 — discret, juste à côté du prénom en admin */
+.fraise-discrete {
+  font-size: 13px;
+  opacity: 0.35;
   user-select: none;
 }
 

@@ -16,7 +16,7 @@ function dateISOLocale(d) {
   return `${y}-${m}-${j}`;
 }
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
-const VERSION_SITE = 'V35';
+const VERSION_SITE = 'V36';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 
 let membreData = null;
@@ -918,7 +918,7 @@ setTimeout(() => {
 async function chargerBlogMembre() {
   const snap = await getDocs(collection(db, 'articles'));
   const articles = [];
-  snap.forEach(d => articles.push({ id: d.id, ...d.data() }));
+  snap.forEach(d => { const a = { id: d.id, ...d.data() }; if (!a.archive) articles.push(a); });
   articles.sort((a, b) => (b.datePublication || '').localeCompare(a.datePublication || ''));
 
   const wrap = document.getElementById('zoneBlog');

@@ -20,7 +20,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V35';
+const VERSION_SITE = 'V36';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
@@ -39,8 +39,6 @@ onAuthStateChanged(auth, async (user) => {
   await chargerGroupes();
   await chargerMembres();
   await chargerServices();
-  await detecterAbsencesNonRepondues();
-  await traiterAbsencesAutomatiques();
   chargerConversations();
   chargerAnniversaires();
   chargerCotisationsARenouveler();
@@ -50,6 +48,20 @@ onAuthStateChanged(auth, async (user) => {
   chargerRdv();
   chargerArticles();
   chargerVideosAdmin();
+
+  // Rattrapage des absences non répondues + décompte : potentiellement long
+  // (beaucoup d'écritures la première fois), donc en arrière-plan, sans
+  // bloquer l'affichage du reste de la page. Protégé par try/catch pour
+  // qu'une erreur ici ne casse jamais le reste de l'admin.
+  (async () => {
+    try {
+      await detecterAbsencesNonRepondues();
+      await traiterAbsencesAutomatiques();
+      chargerCeSoir();
+    } catch (err) {
+      console.error('Erreur rattrapage absences :', err);
+    }
+  })();
   chargerBoutiqueAdmin();
   console.log('%c🍓 Un petit jardin secret pour toi, Katia...', 'color:#C0392B; font-size:13px;');
 });
@@ -1504,40 +1516,76 @@ function bulleMessage(m, pointDeVue) {
 // ==========================================================================
 // BLOG (articles publics)
 // ==========================================================================
+let currentArticlesArchives = [];
+
 async function chargerArticles() {
   const snap = await getDocs(collection(db, 'articles'));
-  const articles = [];
-  snap.forEach(d => articles.push({ id: d.id, ...d.data() }));
-  articles.sort((a, b) => (b.datePublication || '').localeCompare(a.datePublication || ''));
+  const tous = [];
+  snap.forEach(d => tous.push({ id: d.id, ...d.data() }));
+  tous.sort((a, b) => (b.datePublication || '').localeCompare(a.datePublication || ''));
+
+  const articles = tous.filter(a => !a.archive);
+  currentArticlesArchives = tous.filter(a => a.archive);
 
   const wrap = document.getElementById('listeArticles');
   if (articles.length === 0) {
     wrap.innerHTML = '<div class="empty-state">Aucun article pour l\'instant.</div>';
+  } else {
+    wrap.innerHTML = articles.map(a => `
+      <div class="data-row">
+        <div class="data-main">
+          <div class="data-title">${escapeHtml(a.titre)}</div>
+          <div class="data-sub">${a.datePublication || ''} · ${escapeHtml((a.contenu || '').slice(0, 80))}${(a.contenu||'').length > 80 ? '…' : ''}</div>
+        </div>
+        <div class="data-actions">
+          <button class="btn-sm" onclick="window.editerArticle('${a.id}')">Modifier</button>
+          <button class="btn-sm danger" onclick="window.archiverArticle('${a.id}')">Archiver</button>
+        </div>
+      </div>`).join('');
+  }
+  renderArticlesArchives();
+}
+
+function renderArticlesArchives() {
+  const wrap = document.getElementById('listeArticlesArchives');
+  if (!wrap) return;
+  if (currentArticlesArchives.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucun article archivé.</div>';
     return;
   }
-  wrap.innerHTML = articles.map(a => `
+  wrap.innerHTML = currentArticlesArchives.map(a => `
     <div class="data-row">
       <div class="data-main">
         <div class="data-title">${escapeHtml(a.titre)}</div>
-        <div class="data-sub">${a.datePublication || ''} · ${escapeHtml((a.contenu || '').slice(0, 80))}${(a.contenu||'').length > 80 ? '…' : ''}</div>
+        <div class="data-sub">${a.datePublication || ''}</div>
       </div>
       <div class="data-actions">
-        <button class="btn-sm" onclick="window.editerArticle('${a.id}')">Modifier</button>
-        <button class="btn-sm danger" onclick="window.supprimerArticle('${a.id}')">Supprimer</button>
+        <button class="btn-sm primary" onclick="window.reactiverArticle('${a.id}')">Remettre en ligne</button>
       </div>
     </div>`).join('');
 }
 
 document.getElementById('btnAjouterArticle').addEventListener('click', () => ouvrirModalArticle());
 
+document.getElementById('btnVoirArticlesArchives')?.addEventListener('click', () => {
+  const wrap = document.getElementById('listeArticlesArchives');
+  const visible = wrap.style.display !== 'none';
+  wrap.style.display = visible ? 'none' : 'block';
+});
+
 window.editerArticle = async (id) => {
   const d = await getDoc(doc(db, 'articles', id));
   ouvrirModalArticle({ id, ...d.data() });
 };
 
-window.supprimerArticle = async (id) => {
-  if (!confirm('Supprimer cet article ?')) return;
-  await deleteDoc(doc(db, 'articles', id));
+window.archiverArticle = async (id) => {
+  if (!confirm('Archiver cet article ? Il ne sera plus visible des membres mais restera récupérable.')) return;
+  await updateDoc(doc(db, 'articles', id), { archive: true });
+  chargerArticles();
+};
+
+window.reactiverArticle = async (id) => {
+  await updateDoc(doc(db, 'articles', id), { archive: false });
   chargerArticles();
 };
 
@@ -1782,12 +1830,12 @@ async function detecterAbsencesNonRepondues() {
 
   if (aCreer.length === 0) return;
 
-  for (const p of aCreer) {
-    await setDoc(doc(db, 'presences', `${p.groupeId}_${p.dateISO}_${p.uid}`), {
+  await Promise.all(aCreer.map(p =>
+    setDoc(doc(db, 'presences', `${p.groupeId}_${p.dateISO}_${p.uid}`), {
       groupeId: p.groupeId, uid: p.uid, dateISO: p.dateISO, statut: 'absent-auto',
       repondu: new Date().toISOString(), compteAbonnement: false
-    });
-  }
+    })
+  ));
 }
 
 // ==========================================================================
