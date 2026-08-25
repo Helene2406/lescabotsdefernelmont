@@ -20,7 +20,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V30';
+const VERSION_SITE = 'V31';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
@@ -990,6 +990,14 @@ function escapeHtml(str) {
 }
 function escapeAttr(str) { return escapeHtml(str); }
 
+// Échappe le texte puis transforme les liens http(s)://... tapés dedans en
+// vrais liens cliquables (ouverture dans un nouvel onglet).
+function texteAvecLiens(str) {
+  const echappe = escapeHtml(str);
+  return echappe.replace(/(https?:\/\/[^\s<]+)/g, url =>
+    `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`);
+}
+
 // ==========================================================================
 // SERVICES (remplace l'ancien "Tarifs" — catégories libres, prix ou texte)
 // ==========================================================================
@@ -1497,8 +1505,10 @@ function ouvrirModalArticle(article) {
       <div class="modal-box" style="max-width:520px;">
         <h3>${isEdit ? 'Modifier l\'article' : 'Nouvel article'}</h3>
         <div class="field"><label>Titre</label><input id="ar-titre" value="${isEdit ? escapeAttr(article.titre) : ''}"></div>
-        <div class="field"><label>Image (URL, optionnel)</label><input id="ar-image" value="${isEdit ? escapeAttr(article.image||'') : ''}" placeholder="https://..."></div>
+        <div class="field"><label>Image (URL d'un fichier .jpg/.png, optionnel)</label><input id="ar-image" value="${isEdit ? escapeAttr(article.image||'') : ''}" placeholder="https://exemple.be/photo.jpg"></div>
+        <div class="field"><label>Lien externe (optionnel — vers un article, une actualité...)</label><input id="ar-lien" value="${isEdit ? escapeAttr(article.lien||'') : ''}" placeholder="https://..."></div>
         <div class="field"><label>Contenu</label><textarea id="ar-contenu" rows="7" style="resize:vertical;">${isEdit ? escapeHtml(article.contenu) : ''}</textarea></div>
+        <p style="font-size:0.78rem; color:var(--slate);">Astuce : tout lien tapé directement dans le texte du contenu devient automatiquement cliquable.</p>
         <div class="modal-actions">
           <button class="btn-sm" onclick="window.fermerModal()">Annuler</button>
           <button class="btn-sm primary" id="ar-save">${isEdit ? 'Enregistrer' : 'Publier'}</button>
@@ -1513,6 +1523,7 @@ function ouvrirModalArticle(article) {
     const data = {
       titre, contenu,
       image: document.getElementById('ar-image').value.trim(),
+      lien: document.getElementById('ar-lien').value.trim(),
       datePublication: isEdit ? article.datePublication : dateISOLocale(new Date())
     };
     if (isEdit) {

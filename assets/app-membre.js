@@ -16,7 +16,7 @@ function dateISOLocale(d) {
   return `${y}-${m}-${j}`;
 }
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
-const VERSION_SITE = 'V30';
+const VERSION_SITE = 'V31';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 
 let membreData = null;
@@ -275,6 +275,11 @@ window.repondrePresence = async (dateISO, statut) => {
 function escapeHtml(str) {
   if (!str) return '';
   return str.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function texteAvecLiens(str) {
+  const echappe = escapeHtml(str);
+  return echappe.replace(/(https?:\/\/[^\s<]+)/g, url =>
+    `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`);
 }
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
@@ -925,7 +930,8 @@ async function chargerBlogMembre() {
         ${a.image ? `<img src="${escapeHtml(a.image)}" alt="${escapeHtml(a.titre)}" style="width:100%; max-height:260px; object-fit:cover; border-radius:6px; margin-bottom:14px;">` : ''}
         <h3 style="font-size:1.15rem;">${escapeHtml(a.titre)}</h3>
         <p style="color:var(--slate); font-size:0.8rem; margin-bottom:10px;">${a.datePublication || ''}</p>
-        <p style="white-space:pre-wrap;">${escapeHtml(a.contenu)}</p>
+        <p style="white-space:pre-wrap;">${texteAvecLiens(a.contenu)}</p>
+        ${a.lien ? `<a href="${escapeHtml(a.lien)}" target="_blank" rel="noopener noreferrer" class="btn-sm" style="display:inline-block; text-decoration:none; margin-top:10px;">🔗 En savoir plus</a>` : ''}
       </div>`).join('');
   }
 
