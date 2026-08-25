@@ -20,7 +20,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V31';
+const VERSION_SITE = 'V32';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
@@ -1823,6 +1823,7 @@ function ouvrirModalArticleBoutique(article) {
       <div class="modal-box">
         <h3>${isEdit ? 'Modifier l\'article' : 'Ajouter un article'}</h3>
         <div class="field"><label>Nom</label><input id="ab-nom" value="${isEdit ? escapeAttr(article.nom) : ''}"></div>
+        <div class="field"><label>Photo (URL d'un fichier .jpg/.png, optionnel)</label><input id="ab-photoURL" value="${isEdit ? escapeAttr(article.photoURL||'') : ''}" placeholder="https://exemple.be/photo.jpg"></div>
         <div class="form-grid">
           <div class="field"><label>Référence article</label><input id="ab-reference" value="${isEdit ? escapeAttr(article.reference||'') : ''}" placeholder="ex: LAI-CUIR-01"></div>
           <div class="field"><label>Poids (grammes)</label><input type="number" id="ab-poids" value="${isEdit ? (article.poids ?? '') : ''}" placeholder="ex: 250"></div>
@@ -1853,6 +1854,7 @@ function ouvrirModalArticleBoutique(article) {
     if (!nom || isNaN(prix) || isNaN(stock)) { alert('Merci de remplir nom, prix et stock.'); btnSave.disabled = false; return; }
     const data = {
       nom, prix, stock,
+      photoURL: document.getElementById('ab-photoURL').value.trim(),
       reference: document.getElementById('ab-reference').value.trim(),
       poids: document.getElementById('ab-poids').value ? parseInt(document.getElementById('ab-poids').value, 10) : null,
       actif: document.getElementById('ab-actif').value === 'oui'
