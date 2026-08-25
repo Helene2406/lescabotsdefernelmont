@@ -40,6 +40,11 @@ service cloud.firestore {
       allow write: if estAdmin();
     }
 
+    match /confirmations/{id} {
+      allow read: if estConnecte();
+      allow write: if estAdmin();
+    }
+
     match /services/{id} {
       allow read: if estConnecte();
       allow write: if estAdmin();
