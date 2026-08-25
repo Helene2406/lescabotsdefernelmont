@@ -13,13 +13,8 @@
 </head>
 <body class="app-body">
 
-<!-- 🍓 petit jardin secret, discret, visible uniquement ici (page admin) -->
-<span class="secret-fraise" style="top:8px; left:6px;">🍓</span>
-<span class="secret-fraise" style="bottom:10px; right:10px;">🍓</span>
-<span class="secret-fraise" style="top:50%; left:2px;">🍓</span>
-
 <div class="app-topbar">
-  <div class="app-title">Bonjour <span id="adminNom">Katia</span> <small>Espace administrateur · <span id="versionTag" style="opacity:0.6;"></span></small></div>
+  <div class="app-title">Bonjour <span id="adminNom">Katia</span> <span class="fraise-discrete" title="🍓">🍓</span> <small>Espace administrateur · <span id="versionTag" style="opacity:0.6;"></span></small></div>
   <div style="display:flex; align-items:center; gap:8px;">
     <button class="btn-sm" id="logoutBtn" style="background:transparent; border-color:rgba(255,255,255,0.4); color:#fff;">Déconnexion</button>
     <a class="app-home-link" href="index.html" title="Retour au site" aria-label="Retour au site">⌂</a>
@@ -128,6 +123,8 @@
       </div>
       <p style="color:var(--slate); font-size:0.85rem; margin-bottom:14px;">Ces articles sont visibles uniquement par les membres connectés, dans l'onglet "Blog" de leur espace.</p>
       <div class="data-list" id="listeArticles"><div class="empty-state">...</div></div>
+      <button class="btn-sm" id="btnVoirArticlesArchives" style="margin-top:14px;">Voir les articles archivés</button>
+      <div class="data-list" id="listeArticlesArchives" style="margin-top:10px; display:none;"></div>
     </div>
   </div>
 
