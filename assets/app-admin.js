@@ -10,6 +10,8 @@ import { getAuth as getAuthSecondary, createUserWithEmailAndPassword, signOut as
 import { meteoActuelle, meteoPour, alerteMeteo, iconeCode } from "./meteo.js";
 
 const JOURS = ["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"];
+const VERSION_SITE = 'V27';
+document.getElementById('versionTag').textContent = VERSION_SITE;
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
 let currentGroupes = [];
@@ -1712,6 +1714,10 @@ async function chargerCommandesAdmin() {
   const commandes = [];
   snap.forEach(d => commandes.push({ id: d.id, ...d.data() }));
   commandes.sort((a, b) => (b.dateCreation?.toMillis?.() || 0) - (a.dateCreation?.toMillis?.() || 0));
+
+  const enAttente = commandes.filter(c => c.statut === 'en_attente').length;
+  const tabBtn = document.getElementById('tabBoutiqueBtn');
+  if (tabBtn) tabBtn.classList.toggle('has-unread', enAttente > 0);
 
   const wrap = document.getElementById('listeCommandes');
   if (commandes.length === 0) {
