@@ -23,6 +23,8 @@
 
 <main class="app-main">
 
+  <div id="zoneAlerteMessage"></div>
+
   <!-- Toujours visibles -->
   <div class="app-panel">
     <h2>Mon abonnement</h2>
@@ -169,8 +171,12 @@
   document.querySelectorAll('.panel-toggle').forEach(t => {
     t.addEventListener('click', () => {
       const body = document.getElementById(t.dataset.target);
+      const vaSouvrir = body.classList.contains('collapsed');
       body.classList.toggle('collapsed');
       t.classList.toggle('open');
+      if (vaSouvrir && t.dataset.target === 'panelMessages' && window.marquerMessagesLusDepuisAccordeon) {
+        window.marquerMessagesLusDepuisAccordeon();
+      }
     });
   });
 </script>
