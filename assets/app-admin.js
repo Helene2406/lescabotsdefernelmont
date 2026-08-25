@@ -10,7 +10,17 @@ import { getAuth as getAuthSecondary, createUserWithEmailAndPassword, signOut as
 import { meteoActuelle, meteoPour, alerteMeteo, iconeCode } from "./meteo.js";
 
 const JOURS = ["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"];
-const VERSION_SITE = 'V27';
+
+// IMPORTANT : ne jamais utiliser Date.toISOString() pour obtenir la date du
+// jour — ça convertit en UTC et décale d'un jour selon l'heure (surtout le
+// soir en Belgique, UTC+2 l'été). Cette fonction reste sur l'heure locale.
+function dateISOLocale(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const j = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${j}`;
+}
+const VERSION_SITE = 'V28';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
@@ -717,7 +727,7 @@ window.ouvrirModalPaiement = (membreId) => {
         </div>
         <div class="form-grid">
           <div class="field"><label>Montant (€ TTC)</label><input type="number" step="0.01" id="pay-montant"></div>
-          <div class="field"><label>Date</label><input type="date" id="pay-date" value="${new Date().toISOString().slice(0,10)}"></div>
+          <div class="field"><label>Date</label><input type="date" id="pay-date" value="${dateISOLocale(new Date())}"></div>
         </div>
         <div class="field"><label>Note (optionnel)</label><input id="pay-note" placeholder="ex: viré le 12/03"></div>
         <div class="modal-actions">
@@ -763,7 +773,7 @@ async function chargerCeSoir() {
   for (let i = 0; i < 7; i++) {
     const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() + i);
     const jour = JOURS[d.getDay()];
-    const dateISO = d.toISOString().slice(0, 10);
+    const dateISO = dateISOLocale(d);
     currentGroupes.filter(g => g.jour === jour).forEach(g => occurrences.push({ date: d, dateISO, groupe: g }));
   }
 
@@ -776,6 +786,10 @@ async function chargerCeSoir() {
   const annulations = {};
   annulSnap.forEach(d => { annulations[d.id] = d.data(); });
 
+  const confirmSnap = await getDocs(collection(db, 'confirmations'));
+  const confirmations = {};
+  confirmSnap.forEach(d => { confirmations[d.id] = d.data(); });
+
   const presSnap = await getDocs(collection(db, 'presences'));
   const presencesParCle = {};
   presSnap.forEach(d => {
@@ -786,11 +800,12 @@ async function chargerCeSoir() {
   });
 
   const MIN_PARTICIPANTS = 4;
-  const aujourdhuiISO = new Date().toISOString().slice(0, 10);
+  const aujourdhuiISO = dateISOLocale(new Date());
 
   const lignes = await Promise.all(occurrences.map(async ({ date, dateISO, groupe: g }) => {
     const cle = `${g.id}_${dateISO}`;
     const annule = annulations[cle];
+    const confirme = confirmations[cle];
     const nbMembres = currentMembres.filter(m => m.groupeId === g.id).length;
     const presencesJour = presencesParCle[cle] || { present: 0, absent: 0 };
     const pasAssez = !annule && presencesJour.present < MIN_PARTICIPANTS;
@@ -807,7 +822,8 @@ async function chargerCeSoir() {
         <div class="data-sub">
           ${nbMembres} chiens inscrits · <strong>${presencesJour.present}</strong> confirmé(s) présent(s)${presencesJour.absent ? `, ${presencesJour.absent} absent(s)` : ''}
           ${annule ? `<span class="badge badge-danger">Annulé — ${escapeHtml(annule.motif)}</span>` : `<span class="badge badge-ok">Maintenu</span>`}
-          ${m ? `<span class="badge badge-neutral">${iconeCode(m.code)} ${m.temperature}°C · pluie ${m.pluie}%</span>` : ''}
+          ${confirme && !annule ? `<span class="badge badge-ok">✅ Confirmé par Katia</span>` : ''}
+          ${m ? `<span class="badge badge-neutral">${iconeCode(m.code)} ${m.temperature}°C · pluie ${m.pluie}%</span>` : '<span class="badge badge-neutral">Météo indisponible</span>'}
         </div>
         ${alerte && !annule ? `<div class="banner-alert" style="margin-top:8px; padding:8px 12px; ${alerte.niveau==='danger' ? 'background:#FBEAEA;border-color:#E3B4B4;color:#8A2E2E;' : ''}">⚠️ ${alerte.texte} — pense à vérifier si le cours doit être maintenu.</div>` : ''}
         ${pasAssez ? `<div class="banner-alert" style="margin-top:8px; padding:8px 12px; background:#FBEAEA;border-color:#E3B4B4;color:#8A2E2E;">⚠️ Seulement ${presencesJour.present} confirmation(s) sur les ${MIN_PARTICIPANTS} minimum requises — le cours devra être annulé faute de participants si ça n'évolue pas.</div>` : ''}
@@ -815,7 +831,10 @@ async function chargerCeSoir() {
       <div class="data-actions">
         ${annule
           ? `<button class="btn-sm" onclick="window.reactiverCours('${g.id}','${dateISO}')">Réactiver</button>`
-          : `<button class="btn-sm danger" onclick="window.annulerCours('${g.id}','${dateISO}')">Annuler ce cours</button>`}
+          : `
+            ${!confirme ? `<button class="btn-sm primary" onclick="window.validerCoursSemaine('${g.id}','${dateISO}')">✅ Valider ce cours</button>` : `<button class="btn-sm" onclick="window.retirerValidationCours('${g.id}','${dateISO}')">Retirer la validation</button>`}
+            <button class="btn-sm danger" onclick="window.annulerCours('${g.id}','${dateISO}')">Annuler ce cours</button>
+          `}
       </div>
     </div>`;
   }));
@@ -829,13 +848,50 @@ async function chargerCeSoir() {
 
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
-window.annulerCours = async (groupeId, dateISO) => {
-  const motif = prompt('Motif de l\'annulation (pluie / chaleur / pas assez de participants) :');
-  if (!motif) return;
-  await setDoc(doc(db, 'annulations', `${groupeId}_${dateISO}`), {
-    motif, annulePar: 'admin', dateAnnulation: serverTimestamp()
+window.validerCoursSemaine = async (groupeId, dateISO) => {
+  await setDoc(doc(db, 'confirmations', `${groupeId}_${dateISO}`), {
+    validePar: 'admin', dateValidation: serverTimestamp()
   });
   chargerCeSoir();
+};
+
+window.retirerValidationCours = async (groupeId, dateISO) => {
+  await deleteDoc(doc(db, 'confirmations', `${groupeId}_${dateISO}`));
+  chargerCeSoir();
+};
+
+window.annulerCours = (groupeId, dateISO) => {
+  const html = `
+    <div class="modal-overlay" id="modalOverlayMotif">
+      <div class="modal-box">
+        <h3>Motif de l'annulation</h3>
+        <div class="field">
+          <select id="motif-select">
+            <option value="Pluie">Pluie</option>
+            <option value="Chaleur / canicule">Chaleur / canicule</option>
+            <option value="Pas assez de participants">Pas assez de participants</option>
+            <option value="Autre">Autre (préciser ci-dessous)</option>
+          </select>
+        </div>
+        <div class="field"><label>Précision (optionnel)</label><input id="motif-texte" placeholder="ex: orage annoncé en soirée"></div>
+        <div class="modal-actions">
+          <button class="btn-sm" onclick="document.getElementById('modalOverlayMotif').remove()">Annuler</button>
+          <button class="btn-sm primary" id="motif-save">Confirmer l'annulation</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  document.getElementById('motif-save').addEventListener('click', async () => {
+    const choix = document.getElementById('motif-select').value;
+    const precision = document.getElementById('motif-texte').value.trim();
+    const motif = precision ? `${choix} — ${precision}` : choix;
+    await setDoc(doc(db, 'annulations', `${groupeId}_${dateISO}`), {
+      motif, annulePar: 'admin', dateAnnulation: serverTimestamp()
+    });
+    await deleteDoc(doc(db, 'confirmations', `${groupeId}_${dateISO}`)).catch(() => {});
+    document.getElementById('modalOverlayMotif').remove();
+    chargerCeSoir();
+  });
 };
 
 window.reactiverCours = async (groupeId, dateISO) => {
@@ -1042,7 +1098,7 @@ async function chargerRdv() {
       return `
       <div class="data-row">
         <div class="data-main">
-          <div class="data-title">${escapeHtml(m?.nomMaitre || '?')} ${r.nombrePersonnes > 1 ? `(${r.nombrePersonnes} pers.)` : ''}</div>
+          <div class="data-title">${escapeHtml(m?.nomMaitre || '?')}${m && nomsChiensActifs(m) ? ' — ' + escapeHtml(nomsChiensActifs(m)) : ''} ${r.nombrePersonnes > 1 ? `(${r.nombrePersonnes} pers.)` : ''}</div>
           <div class="data-sub">
             ${rdv.prixParPersonne ? `${Number(r.montant||0).toFixed(2)} € dû` : ''}
             ${r.paye ? '<span class="badge badge-ok">A indiqué avoir payé</span>' : '<span class="badge badge-neutral">Pas encore payé</span>'}
@@ -1189,7 +1245,7 @@ async function chargerConversations() {
       return `
       <div class="data-row" style="cursor:pointer;" onclick="window.ouvrirConversation('${m.id}')">
         <div class="data-main">
-          <div class="data-title">${escapeHtml(m.nomMaitre)} ${nonLu ? '<span class="badge badge-danger">Nouveau</span>' : ''}</div>
+          <div class="data-title">${escapeHtml(m.nomMaitre)}${nomsChiensActifs(m) ? ' — ' + escapeHtml(nomsChiensActifs(m)) : ''} ${nonLu ? '<span class="badge badge-danger">Nouveau</span>' : ''}</div>
           <div class="data-sub">${c?.dernierMessage ? escapeHtml(c.dernierMessage).slice(0, 60) : 'Aucun message pour l\'instant'}</div>
         </div>
         <div class="data-actions"><button class="btn-sm">Ouvrir</button></div>
@@ -1218,7 +1274,7 @@ window.ouvrirConversation = async (uid) => {
   const html = `
     <div class="modal-overlay" id="modalOverlay">
       <div class="modal-box" style="max-width:520px;">
-        <h3>${escapeHtml(membre?.nomMaitre || '')}</h3>
+        <h3>${escapeHtml(membre?.nomMaitre || '')}${membre && nomsChiensActifs(membre) ? ' — ' + escapeHtml(nomsChiensActifs(membre)) : ''}</h3>
         <div class="chat-thread" id="chatThread">
           ${msgs.map(m => bulleMessage(m, 'admin')).join('') || '<div class="empty-state">Aucun message.</div>'}
         </div>
@@ -1368,7 +1424,7 @@ function ouvrirModalArticle(article) {
     const data = {
       titre, contenu,
       image: document.getElementById('ar-image').value.trim(),
-      datePublication: isEdit ? article.datePublication : new Date().toISOString().slice(0, 10)
+      datePublication: isEdit ? article.datePublication : dateISOLocale(new Date())
     };
     if (isEdit) {
       await updateDoc(doc(db, 'articles', article.id), data);
@@ -1734,7 +1790,7 @@ async function chargerCommandesAdmin() {
     return `
     <div class="data-row">
       <div class="data-main">
-        <div class="data-title">${escapeHtml(membre?.nomMaitre || '?')} — ${Number(c.total).toFixed(2)} € TTC ${badgeStatut}</div>
+        <div class="data-title">${escapeHtml(membre?.nomMaitre || '?')}${membre && nomsChiensActifs(membre) ? ' — ' + escapeHtml(nomsChiensActifs(membre)) : ''} — ${Number(c.total).toFixed(2)} € TTC ${badgeStatut}</div>
         <div class="data-sub">${detailLignes}</div>
         ${c.numeroFacture ? `<div class="data-sub">N° facture compta : <strong>${escapeHtml(c.numeroFacture)}</strong></div>` : ''}
         ${c.statut === 'validee' ? `

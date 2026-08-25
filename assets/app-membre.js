@@ -5,8 +5,18 @@ import {
 import { meteoPour, alerteMeteo, iconeCode } from "./meteo.js";
 
 const JOURS = ["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"];
+
+// IMPORTANT : ne jamais utiliser Date.toISOString() pour obtenir la date du
+// jour — ça convertit en UTC et décale d'un jour selon l'heure (surtout le
+// soir en Belgique, UTC+2 l'été). Cette fonction reste sur l'heure locale.
+function dateISOLocale(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const j = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${j}`;
+}
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
-const VERSION_SITE = 'V27';
+const VERSION_SITE = 'V28';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 
 let membreData = null;
@@ -164,6 +174,10 @@ async function afficherProchainsCours() {
   const annulations = {};
   annulSnap.forEach(d => { annulations[d.id] = d.data(); });
 
+  const confirmSnap = await getDocs(collection(db, 'confirmations'));
+  const confirmations = {};
+  confirmSnap.forEach(d => { confirmations[d.id] = d.data(); });
+
   const presSnap = await getDocs(collection(db, 'presences'));
   const presences = {};
   presSnap.forEach(d => { presences[d.id] = d.data(); });
@@ -171,15 +185,17 @@ async function afficherProchainsCours() {
   const wrap = document.getElementById('zoneCours');
 
   const lignes = await Promise.all(dates.map(async (d) => {
-    const dateISO = d.toISOString().slice(0, 10);
+    const dateISO = dateISOLocale(d);
     const dateLabel = d.toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
     const cleAnnul = `${groupeData.id}_${dateISO}`;
     const clePres = `${groupeData.id}_${dateISO}_${membreUid}`;
     const annule = annulations[cleAnnul];
+    const confirme = confirmations[cleAnnul];
     const presence = presences[clePres];
     const m = await meteoPour(dateISO, groupeData.heureDebut);
     const alerte = alerteMeteo(m);
-    const meteoBadge = m ? `<span class="badge badge-neutral">${iconeCode(m.code)} ${m.temperature}°C · pluie ${m.pluie}%</span>` : '';
+    const meteoBadge = m ? `<span class="badge badge-neutral">${iconeCode(m.code)} ${m.temperature}°C · pluie ${m.pluie}%</span>` : '<span class="badge badge-neutral">Météo indisponible</span>';
+    const confirmeBadge = confirme && !annule ? '<span class="badge badge-ok">✅ Confirmé par Katia</span>' : '';
 
     if (annule) {
       return `
@@ -225,7 +241,7 @@ async function afficherProchainsCours() {
     <div class="data-row">
       <div class="data-main">
         <div class="data-title">${capitalize(dateLabel)} — ${groupeData.heureDebut}</div>
-        <div class="data-sub">${meteoBadge}</div>
+        <div class="data-sub">${meteoBadge} ${confirmeBadge}</div>
         ${alerte ? `<div class="banner-alert" style="margin-top:8px; padding:8px 12px;">⚠️ ${alerte.texte}, une annulation est possible.</div>` : ''}
         ${statutHtml}
       </div>
