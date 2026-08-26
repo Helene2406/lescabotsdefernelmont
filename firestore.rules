@@ -114,5 +114,16 @@ service cloud.firestore {
       allow create: if estConnecte() && request.resource.data.membreId == request.auth.uid;
       allow update, delete: if estAdmin();
     }
+
+    match /campagnes/{id} {
+      allow read: if estConnecte();
+      allow write: if estAdmin();
+    }
+
+    match /precommandes/{id} {
+      allow read: if estConnecte() && (resource.data.membreId == request.auth.uid || estAdmin());
+      allow create, update: if estConnecte() && request.resource.data.membreId == request.auth.uid;
+      allow delete: if estConnecte() && (resource.data.membreId == request.auth.uid || estAdmin());
+    }
   }
 }
