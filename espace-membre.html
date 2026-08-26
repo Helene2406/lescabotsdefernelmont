@@ -164,7 +164,7 @@
     <div class="app-panel">
       <h2>Dog Sitting</h2>
       <div class="banner-alert" style="margin-bottom:16px;">
-        🎒 <strong>À prévoir pour le séjour :</strong> carnet de santé, copie de l'assurance RC familiale, sa couche habituelle (panier, enclos, cage ou couverture/doudou), sa gamelle et sa nourriture habituelle (pour ne pas en changer), ainsi que son traitement éventuel. Merci de nous prévenir de toute allergie ou particularité de comportement.
+        🎒 <strong>À prévoir pour le séjour :</strong> carnet de santé, sa couche habituelle (panier, enclos, cage ou couverture/doudou), sa gamelle et sa nourriture habituelle (pour ne pas en changer), ainsi que son traitement éventuel. Merci de nous prévenir de toute allergie ou particularité de comportement.
       </div>
       <p style="color:var(--slate); font-size:0.85rem; margin-bottom:14px;">Un seul chien est accueilli en Dog Sitting à la fois. Si la période demandée est déjà réservée, votre demande sera soumise à la validation de Katia.</p>
 
@@ -182,7 +182,6 @@
       <h3 style="margin-top:18px;">Je confirme apporter</h3>
       <div class="membre-check-list">
         <label class="membre-check-row"><input type="checkbox" id="ds-apporte-carnet" checked><span>Le carnet de santé</span></label>
-        <label class="membre-check-row"><input type="checkbox" id="ds-apporte-rc" checked><span>La copie de l'assurance RC familiale</span></label>
         <label class="membre-check-row"><input type="checkbox" id="ds-apporte-couche" checked><span>Sa couche (panier, enclos, cage, couverture, doudou...)</span></label>
         <label class="membre-check-row"><input type="checkbox" id="ds-apporte-gamelle" checked><span>Sa gamelle</span></label>
         <label class="membre-check-row"><input type="checkbox" id="ds-apporte-nourriture" checked><span>Sa nourriture habituelle</span></label>
@@ -206,9 +205,34 @@
       <p style="color:var(--slate); font-size:0.82rem; margin-bottom:6px;">Comment se passe une journée et une nuit à la maison ? (ex : pleure la nuit, dort en cage, ne mange pas facilement, a tendance à déchiqueter si seul...)</p>
       <textarea id="ds-habitudes" rows="4" style="width:100%; box-sizing:border-box; resize:vertical;"></textarea>
 
+      <div class="app-panel" style="margin-top:18px; padding:0; overflow:hidden;">
+        <div id="ds-conditions-toggle" style="padding:14px 16px; cursor:pointer; display:flex; align-items:center; justify-content:space-between; background:var(--paper);">
+          <strong>📋 Conditions du Dog Sitting — à lire avant de réserver</strong>
+          <span id="ds-conditions-chevron" style="color:var(--brass);">▾</span>
+        </div>
+        <div id="ds-conditions-texte" class="hidden" style="padding:16px; font-size:0.88rem; color:var(--ink); line-height:1.6;">
+          <p><strong>Pour que votre chien soit accepté :</strong></p>
+          <ul style="margin:0 0 12px 18px; padding:0;">
+            <li>Être en ordre de tous ses vaccins obligatoires (L4, DHPPi), ainsi que contre la toux du chenil (Pneumodog en 2 injections, ou spray nasal BBpi efficace après 72h).</li>
+            <li>Être régulièrement vermifugé (preuve sur le carnet de santé).</li>
+            <li>Être pucé (preuve via le carnet de santé).</li>
+            <li>Femelles stérilisées / mâles castrés : une femelle non stérilisée ne peut venir pendant les 4 semaines de ses chaleurs. Un mâle non castré est accepté s'il fait partie du club et si la cohabitation se passe bien.</li>
+          </ul>
+          <p><strong>Horaires et suppléments :</strong></p>
+          <ul style="margin:0 0 12px 18px; padding:0;">
+            <li>Arrivée entre 14h et 17h. Si le chien est déposé le matin avant midi, la journée complète est comptée ; à partir de 14h, seule la demi-journée est comptée.</li>
+            <li>Reprise avant midi : demi-journée comptée. Reprise l'après-midi avant 17h : journée complète. Reprise après 19h : supplément demandé.</li>
+          </ul>
+          <p><strong>Acompte et annulation :</strong></p>
+          <p style="margin:0 0 12px 0;">Un acompte de 30% est demandé pour confirmer la réservation, à verser sur le compte communiqué (voir votre demande une fois approuvée). En cas d'annulation, cet acompte reste acquis au club.</p>
+          <p><strong>Séjour :</strong></p>
+          <p style="margin:0;">Pendant son séjour, votre chien sera traité comme nos propres chiens de famille, dans le plus grand respect de son rythme : soigné, nourri, chouchouté, baladé. Si votre chien présente des troubles de comportement (tire en laisse, n'écoute pas les ordres de base, grogne, mordille...) et que vous souhaitez un travail spécifique pendant le séjour, un supplément peut être demandé — à convenir avec Katia.</p>
+        </div>
+      </div>
+
       <label class="membre-check-row" style="margin-top:14px;">
         <input type="checkbox" id="ds-consentement">
-        <span>Je déclare avoir pris connaissance des conditions du Dog Sitting et j'accepte de verser un acompte de 30% pour confirmer ma réservation (non remboursable en cas d'annulation).</span>
+        <span>Je déclare avoir pris connaissance des conditions du Dog Sitting ci-dessus et j'accepte de verser un acompte de 30% pour confirmer ma réservation (non remboursable en cas d'annulation).</span>
       </label>
 
       <button class="btn-sm primary" id="ds-envoyer" style="margin-top:14px;">Envoyer la demande</button>
@@ -257,7 +281,15 @@
       }
     });
   });
+
+  document.getElementById('ds-conditions-toggle').addEventListener('click', () => {
+    const texte = document.getElementById('ds-conditions-texte');
+    const chevron = document.getElementById('ds-conditions-chevron');
+    texte.classList.toggle('hidden');
+    chevron.textContent = texte.classList.contains('hidden') ? '▾' : '▴';
+  });
 </script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script type="module" src="assets/app-membre.js"></script>
 </body>
 </html>

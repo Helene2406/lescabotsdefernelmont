@@ -34,6 +34,7 @@
     <button class="tab-btn" data-tab="videos">Vidéos</button>
     <button class="tab-btn" data-tab="boutique" id="tabBoutiqueBtn">Boutique</button>
     <button class="tab-btn" data-tab="dogsitting" id="tabDogSittingBtn">Dog Sitting</button>
+    <button class="tab-btn" data-tab="compta" id="tabComptaBtn">Compta</button>
   </div>
 
   <div id="panel-cesoir" class="tab-panel">
@@ -172,6 +173,32 @@
     <div class="app-panel">
       <h2>Demandes de Dog Sitting</h2>
       <div class="data-list" id="listeDogSitting"><div class="empty-state">...</div></div>
+    </div>
+  </div>
+
+  <div id="panel-compta" class="tab-panel hidden">
+    <div class="app-panel">
+      <h2>Numérotation</h2>
+      <p style="color:var(--slate); font-size:0.85rem; margin-bottom:14px;">Indique le dernier numéro déjà utilisé (avant le site, ou l'an dernier) — le prochain document généré prendra automatiquement le numéro suivant.</p>
+      <h3>Factures de vente</h3>
+      <div class="form-grid">
+        <div class="field"><label>Année</label><input type="number" id="cpt-facture-annee"></div>
+        <div class="field"><label>Dernier numéro déjà utilisé cette année</label><input type="number" id="cpt-facture-dernier" placeholder="ex: 114"></div>
+      </div>
+      <button class="btn-sm primary" id="btnSauverNumFacture">Enregistrer</button>
+
+      <h3 style="margin-top:22px;">Notes de crédit</h3>
+      <div class="form-grid">
+        <div class="field"><label>Année</label><input type="number" id="cpt-nc-annee"></div>
+        <div class="field"><label>Dernier numéro déjà utilisé cette année</label><input type="number" id="cpt-nc-dernier" placeholder="ex: 2"></div>
+      </div>
+      <button class="btn-sm primary" id="btnSauverNumNC">Enregistrer</button>
+    </div>
+
+    <div class="app-panel">
+      <h2>Historique des factures et notes de crédit</h2>
+      <input type="text" id="rechercheCompta" placeholder="🔍 Rechercher un membre ou un numéro..." style="width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #D4DAE0; border-radius:6px; margin-bottom:14px; font-size:0.95rem;">
+      <div class="data-list" id="listeCompta"><div class="empty-state">...</div></div>
     </div>
   </div>
 
