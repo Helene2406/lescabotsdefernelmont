@@ -164,7 +164,7 @@
     <div class="app-panel">
       <h2>Dog Sitting</h2>
       <div class="banner-alert" style="margin-bottom:16px;">
-        🎒 <strong>À prévoir pour le séjour :</strong> croquettes en quantité suffisante, gamelle, laisse et collier/harnais, doudou ou couverture habituelle, jouet préféré, carnet de vaccination/santé, et médicaments éventuels avec les consignes de prise. Merci de nous prévenir de toute allergie ou particularité de comportement.
+        🎒 <strong>À prévoir pour le séjour :</strong> carnet de santé, copie de l'assurance RC familiale, sa couche habituelle (panier, enclos, cage ou couverture/doudou), sa gamelle et sa nourriture habituelle (pour ne pas en changer), ainsi que son traitement éventuel. Merci de nous prévenir de toute allergie ou particularité de comportement.
       </div>
       <p style="color:var(--slate); font-size:0.85rem; margin-bottom:14px;">Un seul chien est accueilli en Dog Sitting à la fois. Si la période demandée est déjà réservée, votre demande sera soumise à la validation de Katia.</p>
 
@@ -178,7 +178,40 @@
         <div class="field"><label>Date de départ</label><input type="date" id="ds-dateFin"></div>
         <div class="field"><label>Heure de départ</label><input type="time" id="ds-heureDepart" value="12:00"></div>
       </div>
-      <button class="btn-sm primary" id="ds-envoyer">Envoyer la demande</button>
+
+      <h3 style="margin-top:18px;">Je confirme apporter</h3>
+      <div class="membre-check-list">
+        <label class="membre-check-row"><input type="checkbox" id="ds-apporte-carnet" checked><span>Le carnet de santé</span></label>
+        <label class="membre-check-row"><input type="checkbox" id="ds-apporte-rc" checked><span>La copie de l'assurance RC familiale</span></label>
+        <label class="membre-check-row"><input type="checkbox" id="ds-apporte-couche" checked><span>Sa couche (panier, enclos, cage, couverture, doudou...)</span></label>
+        <label class="membre-check-row"><input type="checkbox" id="ds-apporte-gamelle" checked><span>Sa gamelle</span></label>
+        <label class="membre-check-row"><input type="checkbox" id="ds-apporte-nourriture" checked><span>Sa nourriture habituelle</span></label>
+      </div>
+
+      <h3 style="margin-top:18px;">Services en plus souhaités (optionnel)</h3>
+      <div class="membre-check-list">
+        <label class="membre-check-row"><input type="checkbox" id="ds-service-domicile"><span>Prise et remise à domicile (1,80 €/km)</span></label>
+        <label class="membre-check-row"><input type="checkbox" id="ds-service-balades"><span>Balades supplémentaires (3,00 €/jour)</span></label>
+        <label class="membre-check-row"><input type="checkbox" id="ds-service-reeducation"><span>Rééducation / réapprentissage (5,00 €/jour, forfait min. 50 €/semaine)</span></label>
+      </div>
+      <div class="field"><label>Toilettage souhaité</label>
+        <select id="ds-service-toilettage">
+          <option value="">Aucun</option>
+          <option value="Bain + séchage">Bain + séchage</option>
+          <option value="Bain + démêlage, débourrage et séchage">Bain + démêlage, débourrage et séchage</option>
+        </select>
+      </div>
+
+      <h3 style="margin-top:18px;">Habitudes de vie de votre chien</h3>
+      <p style="color:var(--slate); font-size:0.82rem; margin-bottom:6px;">Comment se passe une journée et une nuit à la maison ? (ex : pleure la nuit, dort en cage, ne mange pas facilement, a tendance à déchiqueter si seul...)</p>
+      <textarea id="ds-habitudes" rows="4" style="width:100%; box-sizing:border-box; resize:vertical;"></textarea>
+
+      <label class="membre-check-row" style="margin-top:14px;">
+        <input type="checkbox" id="ds-consentement">
+        <span>Je déclare avoir pris connaissance des conditions du Dog Sitting et j'accepte de verser un acompte de 30% pour confirmer ma réservation (non remboursable en cas d'annulation).</span>
+      </label>
+
+      <button class="btn-sm primary" id="ds-envoyer" style="margin-top:14px;">Envoyer la demande</button>
       <p id="ds-statut" style="font-size:0.85rem; color:var(--slate); margin-top:8px;"></p>
 
       <h3 style="margin-top:20px;">Mes demandes</h3>
