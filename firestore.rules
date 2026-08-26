@@ -108,5 +108,11 @@ service cloud.firestore {
       allow read: if estConnecte() && (resource.data.membreId == request.auth.uid || estAdmin());
       allow create, update, delete: if estAdmin();
     }
+
+    match /dogsitting/{id} {
+      allow read: if estConnecte() && (resource.data.membreId == request.auth.uid || estAdmin());
+      allow create: if estConnecte() && request.resource.data.membreId == request.auth.uid;
+      allow update, delete: if estAdmin();
+    }
   }
 }

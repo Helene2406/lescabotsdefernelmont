@@ -34,6 +34,7 @@
     <button class="tab-btn" data-tab="messages" id="tabMessagesBtn">Messages</button>
     <button class="tab-btn" data-tab="rdv">RDV</button>
     <button class="tab-btn" data-tab="boutique" id="tabBoutiqueBtn">Boutique</button>
+    <button class="tab-btn hidden" data-tab="dogsitting" id="tabDogSittingBtn">Dog Sitting</button>
     <button class="tab-btn" data-tab="videos">Vidéos</button>
     <button class="tab-btn" data-tab="historique">Historique</button>
   </div>
@@ -150,6 +151,33 @@
 
       <h3 style="margin-top:18px;">Historique de mes commandes</h3>
       <div class="data-list" id="zoneMesCommandes"><div class="empty-state">...</div></div>
+    </div>
+  </div>
+
+  <!-- ==================== DOG SITTING ==================== -->
+  <div id="panel-dogsitting" class="tab-panel hidden">
+    <div class="app-panel">
+      <h2>Dog Sitting</h2>
+      <div class="banner-alert" style="margin-bottom:16px;">
+        🎒 <strong>À prévoir pour le séjour :</strong> croquettes en quantité suffisante, gamelle, laisse et collier/harnais, doudou ou couverture habituelle, jouet préféré, carnet de vaccination/santé, et médicaments éventuels avec les consignes de prise. Merci de nous prévenir de toute allergie ou particularité de comportement.
+      </div>
+      <p style="color:var(--slate); font-size:0.85rem; margin-bottom:14px;">Un seul chien est accueilli en Dog Sitting à la fois. Si la période demandée est déjà réservée, votre demande sera soumise à la validation de Katia.</p>
+
+      <h3>Faire une demande</h3>
+      <div class="field"><label>Chien concerné</label><select id="ds-chien"></select></div>
+      <div class="form-grid">
+        <div class="field"><label>Date d'arrivée</label><input type="date" id="ds-dateDebut"></div>
+        <div class="field"><label>Heure d'arrivée</label><input type="time" id="ds-heureArrivee" value="14:00"></div>
+      </div>
+      <div class="form-grid">
+        <div class="field"><label>Date de départ</label><input type="date" id="ds-dateFin"></div>
+        <div class="field"><label>Heure de départ</label><input type="time" id="ds-heureDepart" value="12:00"></div>
+      </div>
+      <button class="btn-sm primary" id="ds-envoyer">Envoyer la demande</button>
+      <p id="ds-statut" style="font-size:0.85rem; color:var(--slate); margin-top:8px;"></p>
+
+      <h3 style="margin-top:20px;">Mes demandes</h3>
+      <div class="data-list" id="zoneDogSitting"><div class="empty-state">...</div></div>
     </div>
   </div>
 

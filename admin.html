@@ -33,6 +33,7 @@
     <button class="tab-btn" data-tab="blog">Blog</button>
     <button class="tab-btn" data-tab="videos">Vidéos</button>
     <button class="tab-btn" data-tab="boutique" id="tabBoutiqueBtn">Boutique</button>
+    <button class="tab-btn" data-tab="dogsitting" id="tabDogSittingBtn">Dog Sitting</button>
   </div>
 
   <div id="panel-cesoir" class="tab-panel">
@@ -152,6 +153,17 @@
       <h2>Commandes</h2>
       <input type="text" id="rechercheCommande" placeholder="🔍 Rechercher un membre..." style="width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #D4DAE0; border-radius:6px; margin-bottom:14px; font-size:0.95rem;">
       <div class="data-list" id="listeCommandes"><div class="empty-state">...</div></div>
+    </div>
+  </div>
+
+  <div id="panel-dogsitting" class="tab-panel hidden">
+    <div class="app-panel">
+      <h2>Calendrier</h2>
+      <div id="dsCalendrier"></div>
+    </div>
+    <div class="app-panel">
+      <h2>Demandes de Dog Sitting</h2>
+      <div class="data-list" id="listeDogSitting"><div class="empty-state">...</div></div>
     </div>
   </div>
 
