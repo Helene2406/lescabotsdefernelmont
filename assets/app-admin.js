@@ -20,7 +20,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V38';
+const VERSION_SITE = 'V40';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
@@ -65,6 +65,7 @@ onAuthStateChanged(auth, async (user) => {
   })();
   chargerBoutiqueAdmin();
   chargerDogSittingAdmin();
+  chargerCampagnesAdmin();
   console.log('%c🍓 Un petit jardin secret pour toi, Katia...', 'color:#C0392B; font-size:13px;');
 });
 
@@ -782,7 +783,7 @@ async function chargerHistoriquePaiements(membreId) {
         ${p.numeroFacture ? `<div class="data-sub">Facture n° <strong>${escapeHtml(p.numeroFacture)}</strong></div>` : ''}
       </div>
       <div class="data-actions">
-        ${!p.numeroFacture ? `<button class="btn-sm primary" onclick="window.facturerPaiement('${p.id}')">Générer la facture</button>` : `<button class="btn-sm" onclick="window.envoyerFactureParMail('${membreId}','${p.numeroFacture}')">Envoyer par mail</button>`}
+        ${!p.numeroFacture ? `<button class="btn-sm primary" onclick="window.facturerPaiement('${p.id}')">Générer la facture</button>` : `<button class="btn-sm" onclick="window.retelechargerFacture('${p.numeroFacture}')">Retélécharger PDF+XML</button> <button class="btn-sm" onclick="window.envoyerFactureParMail('${membreId}','${p.numeroFacture}')">Envoyer par mail</button>`}
         <button class="btn-sm danger" onclick="window.supprimerPaiement('${p.id}', '${membreId}')">Supprimer</button>
       </div>
     </div>`).join('');
@@ -1474,7 +1475,26 @@ async function envoyerMessageAdmin(uid) {
 }
 
 document.getElementById('rechercheMessage').addEventListener('input', () => chargerConversations());
+async function envoyerMessageATousMembres(texte, cible = 'tous') {
+  const destinataires = cible === 'tous' ? currentMembres : currentMembres.filter(m => m.groupeId === cible);
+  const maintenant = new Date().toISOString();
+  await Promise.all(destinataires.map(async (m) => {
+    await addDoc(collection(db, 'conversations', m.id, 'messages'), {
+      texte, expediteur: 'admin', dateEnvoi: maintenant, lu: false
+    });
+    await setDoc(doc(db, 'conversations', m.id), {
+      dernierMessage: texte, dateDernierMessage: maintenant, nonLuMembre: true
+    }, { merge: true });
+  }));
+  chargerConversations();
+  return destinataires.length;
+}
+
 document.getElementById('btnMessageGroupe').addEventListener('click', () => {
+  ouvrirModalMessageGroupe();
+});
+
+function ouvrirModalMessageGroupe(texteInitial = '') {
   const html = `
     <div class="modal-overlay" id="modalOverlay">
       <div class="modal-box">
@@ -1485,7 +1505,7 @@ document.getElementById('btnMessageGroupe').addEventListener('click', () => {
             ${currentGroupes.map(g => `<option value="${g.id}">${escapeHtml(g.nom)}</option>`).join('')}
           </select>
         </div>
-        <div class="field"><label>Message</label><textarea id="bc-texte" rows="4" style="resize:vertical;"></textarea></div>
+        <div class="field"><label>Message</label><textarea id="bc-texte" rows="6" style="resize:vertical;">${escapeHtml(texteInitial)}</textarea></div>
         <div class="modal-actions">
           <button class="btn-sm" onclick="window.fermerModal()">Annuler</button>
           <button class="btn-sm primary" id="bc-save">Envoyer</button>
@@ -1497,21 +1517,11 @@ document.getElementById('btnMessageGroupe').addEventListener('click', () => {
     const cible = document.getElementById('bc-cible').value;
     const texte = document.getElementById('bc-texte').value.trim();
     if (!texte) { alert('Merci d\'écrire un message.'); return; }
-    const destinataires = cible === 'tous' ? currentMembres : currentMembres.filter(m => m.groupeId === cible);
-    const maintenant = new Date().toISOString();
-    await Promise.all(destinataires.map(async (m) => {
-      await addDoc(collection(db, 'conversations', m.id, 'messages'), {
-        texte, expediteur: 'admin', dateEnvoi: maintenant, lu: false
-      });
-      await setDoc(doc(db, 'conversations', m.id), {
-        dernierMessage: texte, dateDernierMessage: maintenant, nonLuMembre: true
-      }, { merge: true });
-    }));
+    const nb = await envoyerMessageATousMembres(texte, cible);
     window.fermerModal();
-    alert(`Message envoyé à ${destinataires.length} membre(s).`);
-    chargerConversations();
+    alert(`Message envoyé à ${nb} membre(s).`);
   });
-});
+}
 
 function bulleMessage(m, pointDeVue) {
   const estMoi = m.expediteur === pointDeVue;
@@ -2120,7 +2130,7 @@ async function chargerCommandesAdmin() {
           <button class="btn-sm danger" onclick="window.annulerCommande('${c.id}')">Annuler</button>
         ` : ''}
         ${c.statut === 'validee' && !c.numeroFacture ? `<button class="btn-sm primary" onclick="window.facturerCommande('${c.id}')">Générer la facture</button>` : ''}
-        ${c.numeroFacture ? `<button class="btn-sm" onclick="window.envoyerFactureParMail('${c.membreId}','${c.numeroFacture}')">Envoyer par mail</button>` : ''}
+        ${c.numeroFacture ? `<button class="btn-sm" onclick="window.retelechargerFacture('${c.numeroFacture}')">Retélécharger PDF+XML</button> <button class="btn-sm" onclick="window.envoyerFactureParMail('${c.membreId}','${c.numeroFacture}')">Envoyer par mail</button>` : ''}
         <button class="btn-sm danger" onclick="window.supprimerCommande('${c.id}')">Supprimer</button>
       </div>
     </div>`;
@@ -2232,6 +2242,18 @@ async function genererFacture({ membre, lignes, type, refId }) {
 
   return numero;
 }
+
+// Retélécharge le PDF + XML d'une facture déjà émise (même numéro, aucune
+// nouvelle écriture) — utile si le fichier a été perdu ou mal enregistré.
+window.retelechargerFacture = async (numeroFacture) => {
+  const snap = await getDocs(query(collection(db, 'factures'), where('numero', '==', numeroFacture)));
+  if (snap.empty) { alert('Facture introuvable.'); return; }
+  const facture = snap.docs[0].data();
+  const membre = currentMembres.find(m => m.id === facture.membreId) || currentMembresArchives.find(m => m.id === facture.membreId);
+  if (!membre) { alert('Membre introuvable (peut-être archivé sans fiche retrouvée).'); return; }
+  telechargerFacturePDF({ numero: facture.numero, dateEmission: facture.dateEmission, membre, lignesCalc: facture.lignes, totalHT: facture.totalHT, totalTVA: facture.totalTVA, totalTTC: facture.totalTTC });
+  telechargerFactureUBL({ numero: facture.numero, dateEmission: facture.dateEmission, membre, lignesCalc: facture.lignes, totalHT: facture.totalHT, totalTVA: facture.totalTVA, totalTTC: facture.totalTTC });
+};
 
 function telechargerFacturePDF({ numero, dateEmission, membre, lignesCalc, totalHT, totalTVA, totalTTC }) {
   const { jsPDF } = window.jspdf;
@@ -2559,4 +2581,156 @@ window.supprimerDogSitting = async (id) => {
   if (!confirm('Supprimer cette demande de Dog Sitting ?')) return;
   await deleteDoc(doc(db, 'dogsitting', id));
   chargerDogSittingAdmin();
+};
+
+// ==========================================================================
+// COMMANDES GROUPÉES (précommandes) — ex: commande groupée de croquettes.
+// Le membre précommande avant une date limite ; l'admin récupère le total
+// par article pour passer une seule commande au fournisseur, plus le détail
+// par membre pour facturer/répartir ensuite.
+// ==========================================================================
+let currentCampagnes = [];
+
+async function chargerCampagnesAdmin() {
+  const snap = await getDocs(collection(db, 'campagnes'));
+  currentCampagnes = [];
+  snap.forEach(d => currentCampagnes.push({ id: d.id, ...d.data() }));
+  currentCampagnes.sort((a, b) => (b.dateLimite || '').localeCompare(a.dateLimite || ''));
+  renderCampagnesAdmin();
+}
+
+function renderCampagnesAdmin() {
+  const wrap = document.getElementById('listeCampagnes');
+  if (currentCampagnes.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucune commande groupée pour l\'instant.</div>';
+    return;
+  }
+  wrap.innerHTML = currentCampagnes.map(c => {
+    const dateLimiteLabel = c.dateLimite ? new Date(c.dateLimite + 'T00:00:00').toLocaleDateString('fr-BE') : '';
+    const badge = c.statut === 'cloturee' ? '<span class="badge badge-neutral">Clôturée</span>' : '<span class="badge badge-ok">Ouverte</span>';
+    return `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(c.titre)} ${badge}</div>
+        <div class="data-sub">Date limite : ${dateLimiteLabel} · ${(c.articles||[]).length} article(s)</div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm" onclick="window.voirPrecommandes('${c.id}')">Voir les précommandes</button>
+        ${c.statut !== 'cloturee'
+          ? `<button class="btn-sm danger" onclick="window.cloturerCampagne('${c.id}')">Clôturer</button>`
+          : `<button class="btn-sm" onclick="window.rouvrirCampagne('${c.id}')">Rouvrir</button>`}
+        <button class="btn-sm danger" onclick="window.supprimerCampagne('${c.id}')">Supprimer</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('btnCreerCampagne').addEventListener('click', () => {
+  const html = `
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-box">
+        <h3>Créer une commande groupée</h3>
+        <div class="field"><label>Titre</label><input id="cp-titre" placeholder="ex: Commande croquettes chien"></div>
+        <div class="field"><label>Description (optionnel)</label><textarea id="cp-description" rows="2" style="resize:vertical;" placeholder="ex: Précisez la quantité souhaitée par sac."></textarea></div>
+        <div class="field"><label>Date limite pour commander</label><input type="date" id="cp-dateLimite"></div>
+        <div class="field"><label>Articles proposés</label>
+          <div class="membre-check-list">
+            ${currentArticlesBoutique.map(a => `
+              <label class="membre-check-row">
+                <input type="checkbox" class="cp-article-check" value="${a.id}" data-nom="${escapeAttr(a.nom)}" data-prix="${a.prix}">
+                <span>${escapeHtml(a.nom)} — ${Number(a.prix).toFixed(2)} € TTC</span>
+              </label>`).join('') || '<p style="padding:8px; color:var(--slate); font-size:0.85rem;">Crée d\'abord tes articles (ex: les sacs de nourriture) dans "Articles" ci-dessus.</p>'}
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn-sm" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" id="cp-save">Créer</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+
+  document.getElementById('cp-save').addEventListener('click', async () => {
+    const titre = document.getElementById('cp-titre').value.trim();
+    const dateLimite = document.getElementById('cp-dateLimite').value;
+    const description = document.getElementById('cp-description').value.trim();
+    const articlesChoisis = [...document.querySelectorAll('.cp-article-check:checked')].map(c => ({
+      articleId: c.value, nom: c.dataset.nom, prix: parseFloat(c.dataset.prix)
+    }));
+    if (!titre || !dateLimite || articlesChoisis.length === 0) {
+      alert('Merci de remplir le titre, la date limite, et de choisir au moins un article.');
+      return;
+    }
+
+    await addDoc(collection(db, 'campagnes'), {
+      titre, description, dateLimite, articles: articlesChoisis, statut: 'ouverte',
+      dateCreation: serverTimestamp()
+    });
+    window.fermerModal();
+    chargerCampagnesAdmin();
+
+    // Prépare un message prêt à envoyer à tous, que l'admin peut relire avant d'envoyer.
+    const dateLimiteLabel = new Date(dateLimite + 'T00:00:00').toLocaleDateString('fr-BE');
+    const listeArticles = articlesChoisis.map(a => `- ${a.nom} : ${a.prix.toFixed(2)} € TTC`).join('\n');
+    const messageAuto = `📦 ${titre}\n\n${description ? description + '\n\n' : ''}Voici les articles disponibles :\n${listeArticles}\n\nVous pouvez précommander directement depuis votre espace membre, onglet "Boutique", jusqu'au ${dateLimiteLabel}.`;
+    ouvrirModalMessageGroupe(messageAuto);
+  });
+});
+
+window.cloturerCampagne = async (id) => {
+  await updateDoc(doc(db, 'campagnes', id), { statut: 'cloturee' });
+  chargerCampagnesAdmin();
+};
+window.rouvrirCampagne = async (id) => {
+  await updateDoc(doc(db, 'campagnes', id), { statut: 'ouverte' });
+  chargerCampagnesAdmin();
+};
+window.supprimerCampagne = async (id) => {
+  if (!confirm('Supprimer cette commande groupée ? Les précommandes des membres seront aussi supprimées.')) return;
+  const precSnap = await getDocs(query(collection(db, 'precommandes'), where('campagneId', '==', id)));
+  await Promise.all(precSnap.docs.map(d => deleteDoc(d.ref)));
+  await deleteDoc(doc(db, 'campagnes', id));
+  chargerCampagnesAdmin();
+};
+
+window.voirPrecommandes = async (campagneId) => {
+  const campagne = currentCampagnes.find(c => c.id === campagneId);
+  const snap = await getDocs(query(collection(db, 'precommandes'), where('campagneId', '==', campagneId)));
+  const precommandes = [];
+  snap.forEach(d => precommandes.push(d.data()));
+
+  // Total par article, pour la commande fournisseur
+  const totauxParArticle = {};
+  precommandes.forEach(p => {
+    (p.lignes || []).forEach(l => {
+      if (!totauxParArticle[l.nom]) totauxParArticle[l.nom] = 0;
+      totauxParArticle[l.nom] += l.quantite;
+    });
+  });
+
+  const detailMembres = precommandes.map(p => {
+    const m = currentMembres.find(mm => mm.id === p.membreId);
+    const detail = (p.lignes || []).map(l => `${l.quantite} × ${l.nom}`).join(', ');
+    return `<div class="data-row"><div class="data-main">
+      <div class="data-title">${escapeHtml(m?.nomMaitre || '?')}</div>
+      <div class="data-sub">${detail}</div>
+    </div></div>`;
+  }).join('') || '<div class="empty-state">Aucune précommande pour l\'instant.</div>';
+
+  const totauxHtml = Object.keys(totauxParArticle).length
+    ? Object.entries(totauxParArticle).map(([nom, qte]) => `<div class="data-row"><div class="data-main"><div class="data-title">${escapeHtml(nom)}</div></div><div class="data-actions"><span class="badge badge-ok">${qte} unité(s) au total</span></div></div>`).join('')
+    : '<div class="empty-state">Rien à commander pour l\'instant.</div>';
+
+  const html = `
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-box" style="max-width:560px;">
+        <h3>${escapeHtml(campagne?.titre || '')}</h3>
+        <h3 style="margin-top:14px;">Total à commander au fournisseur</h3>
+        <div class="data-list">${totauxHtml}</div>
+        <h3 style="margin-top:18px;">Détail par membre</h3>
+        <div class="data-list">${detailMembres}</div>
+        <div class="modal-actions"><button class="btn-sm" onclick="window.fermerModal()">Fermer</button></div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
 };

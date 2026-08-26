@@ -16,7 +16,7 @@ function dateISOLocale(d) {
   return `${y}-${m}-${j}`;
 }
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
-const VERSION_SITE = 'V38';
+const VERSION_SITE = 'V40';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 
 let membreData = null;
@@ -87,6 +87,7 @@ function afficherAccueil() {
   afficherMesChiens();
   chargerHistoriquePaiementsMembre();
   chargerBoutiqueMembre();
+  chargerCampagnesMembre();
   document.getElementById('tabDogSittingBtn')?.classList.toggle('hidden', !membreData.accesDogSitting);
   if (membreData.accesDogSitting) chargerDogSittingMembre();
 }
@@ -1050,3 +1051,71 @@ document.getElementById('ds-envoyer').addEventListener('click', async () => {
     : 'Demande envoyée et validée automatiquement (aucun autre chien sur ces dates) !';
   chargerMesDemandesDogSitting();
 });
+
+// ==========================================================================
+// COMMANDES GROUPÉES (précommandes) — ex: commande groupée de croquettes.
+// Modifiable tant que la date limite n'est pas dépassée et que Katia n'a
+// pas clôturé la commande groupée.
+// ==========================================================================
+async function chargerCampagnesMembre() {
+  const snap = await getDocs(collection(db, 'campagnes'));
+  let campagnes = [];
+  snap.forEach(d => campagnes.push({ id: d.id, ...d.data() }));
+  const aujourdhuiISO = dateISOLocale(new Date());
+  campagnes = campagnes.filter(c => c.statut !== 'cloturee' && c.dateLimite >= aujourdhuiISO);
+  campagnes.sort((a, b) => (a.dateLimite || '').localeCompare(b.dateLimite || ''));
+
+  const wrap = document.getElementById('zoneCampagnes');
+  if (campagnes.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucune commande groupée en cours.</div>';
+    return;
+  }
+
+  const precSnap = await getDocs(query(collection(db, 'precommandes'), where('membreId', '==', membreUid)));
+  const mesPrecommandes = {};
+  precSnap.forEach(d => { mesPrecommandes[d.data().campagneId] = { id: d.id, ...d.data() }; });
+
+  wrap.innerHTML = campagnes.map(c => {
+    const dateLimiteLabel = new Date(c.dateLimite + 'T00:00:00').toLocaleDateString('fr-BE');
+    const maPrecommande = mesPrecommandes[c.id];
+    const quantitesActuelles = {};
+    (maPrecommande?.lignes || []).forEach(l => { quantitesActuelles[l.articleId] = l.quantite; });
+
+    return `
+    <div class="app-panel" style="margin-bottom:14px;">
+      <h3>${escapeHtml(c.titre)}</h3>
+      <p style="color:var(--slate); font-size:0.85rem;">${c.description ? escapeHtml(c.description) + ' — ' : ''}À commander avant le <strong>${dateLimiteLabel}</strong></p>
+      <div class="form-grid" style="margin-top:10px;">
+        ${(c.articles || []).map(a => `
+          <div class="field">
+            <label>${escapeHtml(a.nom)} (${a.prix.toFixed(2)} € TTC)</label>
+            <input type="number" min="0" value="${quantitesActuelles[a.articleId] || 0}" id="camp-${c.id}-${a.articleId}">
+          </div>`).join('')}
+      </div>
+      <button class="btn-sm primary" style="margin-top:10px;" onclick="window.envoyerPrecommande('${c.id}')">
+        ${maPrecommande ? 'Mettre à jour ma précommande' : 'Envoyer ma précommande'}
+      </button>
+      <p id="camp-statut-${c.id}" style="font-size:0.85rem; color:var(--slate); margin-top:6px;"></p>
+    </div>`;
+  }).join('');
+}
+
+window.envoyerPrecommande = async (campagneId) => {
+  const snap = await getDoc(doc(db, 'campagnes', campagneId));
+  const campagne = { id: campagneId, ...snap.data() };
+  const statutEl = document.getElementById(`camp-statut-${campagneId}`);
+
+  const lignes = [];
+  (campagne.articles || []).forEach(a => {
+    const qte = parseInt(document.getElementById(`camp-${campagneId}-${a.articleId}`).value, 10) || 0;
+    if (qte > 0) lignes.push({ articleId: a.articleId, nom: a.nom, prix: a.prix, quantite: qte });
+  });
+
+  if (lignes.length === 0) { statutEl.textContent = 'Indiquez au moins une quantité.'; return; }
+
+  const total = lignes.reduce((s, l) => s + l.prix * l.quantite, 0);
+  await setDoc(doc(db, 'precommandes', `${campagneId}_${membreUid}`), {
+    campagneId, membreId: membreUid, lignes, total, dateCommande: serverTimestamp()
+  });
+  statutEl.textContent = `Précommande envoyée (${total.toFixed(2)} € TTC) ✓`;
+};
