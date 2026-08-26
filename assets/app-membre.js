@@ -16,7 +16,7 @@ function dateISOLocale(d) {
   return `${y}-${m}-${j}`;
 }
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
-const VERSION_SITE = 'V40';
+const VERSION_SITE = 'V41';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 
 let membreData = null;
@@ -55,6 +55,7 @@ onAuthStateChanged(auth, async (user) => {
   chargerRdv();
   chargerChat();
   afficherAlerteMessage();
+  afficherSurpriseAnniversaireKatia();
   chargerVideosMembre();
   chargerBlogMembre();
   chargerHistoriquePresencesMembre();
@@ -1119,3 +1120,35 @@ window.envoyerPrecommande = async (campagneId) => {
   });
   statutEl.textContent = `Précommande envoyée (${total.toFixed(2)} € TTC) ✓`;
 };
+
+// ==========================================================================
+// 🎂 Petite surprise annuelle — visible UNIQUEMENT côté membre, jamais dans
+// l'admin, pour que Katia ne découvre pas le pot aux roses elle-même.
+// Rappelle son anniversaire (18 novembre) aux membres, dans les 10 jours
+// précédents et le jour même.
+// ==========================================================================
+function afficherSurpriseAnniversaireKatia() {
+  const aujourdhui = new Date();
+  const annee = aujourdhui.getFullYear();
+  const anniversaire = new Date(annee, 10, 18); // mois 10 = novembre (0-indexé)
+  anniversaire.setHours(0, 0, 0, 0);
+  const auj = new Date(aujourdhui); auj.setHours(0, 0, 0, 0);
+
+  const joursRestants = Math.round((anniversaire - auj) / (1000 * 60 * 60 * 24));
+  if (joursRestants < 0 || joursRestants > 10) return; // hors fenêtre, rien à afficher
+
+  let texte;
+  if (joursRestants === 0) {
+    texte = "🎉🎂 Aujourd'hui, c'est l'anniversaire de Katia ! Une petite pensée dans son fil de messages lui ferait sûrement très plaisir 🐾";
+  } else if (joursRestants === 1) {
+    texte = "🎂 C'est demain, le 18 novembre — l'anniversaire de Katia ! Chut, c'est une surprise 🤫";
+  } else {
+    texte = `🎂 Dans ${joursRestants} jours (le 18 novembre), c'est l'anniversaire de Katia ! Chut, c'est une surprise 🤫`;
+  }
+
+  const banniere = document.createElement('div');
+  banniere.className = 'alerte-anniversaire';
+  banniere.textContent = texte;
+  const main = document.querySelector('.app-main');
+  if (main) main.insertBefore(banniere, main.firstChild);
+}

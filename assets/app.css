@@ -512,3 +512,15 @@
 .ds-case.ds-vide { background: transparent; }
 .ds-case.ds-occupe { background: #FBEFDA; color: #7A5410; font-weight: 600; cursor: pointer; }
 .ds-case.ds-attente { background: #FBEAEA; color: #8A2E2E; font-weight: 600; cursor: pointer; }
+
+/* Petite surprise annuelle 🎂 — style festif, distinct des alertes usuelles */
+.alerte-anniversaire {
+  background: linear-gradient(135deg, #FBEFDA, #F7E5C6);
+  border: 2px dashed var(--brass);
+  color: #7A5410;
+  padding: 14px 18px;
+  border-radius: var(--radius);
+  margin-bottom: 20px;
+  font-weight: 600;
+  text-align: center;
+}
