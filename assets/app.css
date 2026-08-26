@@ -484,3 +484,31 @@
   cursor: pointer;
 }
 .alerte-message:hover { background: #F7E5C6; }
+
+/* Mini-calendrier Dog Sitting */
+.ds-calendrier-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.ds-calendrier-header h3 { margin: 0; }
+.ds-grille {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.ds-jour-label {
+  text-align: center; font-size: 0.72rem; font-weight: 600;
+  color: var(--slate); padding-bottom: 4px;
+}
+.ds-case {
+  aspect-ratio: 1;
+  border-radius: 6px;
+  background: var(--paper);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.82rem; color: var(--ink);
+  position: relative;
+  cursor: default;
+}
+.ds-case.ds-vide { background: transparent; }
+.ds-case.ds-occupe { background: #FBEFDA; color: #7A5410; font-weight: 600; cursor: pointer; }
+.ds-case.ds-attente { background: #FBEAEA; color: #8A2E2E; font-weight: 600; cursor: pointer; }

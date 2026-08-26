@@ -16,7 +16,7 @@ function dateISOLocale(d) {
   return `${y}-${m}-${j}`;
 }
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
-const VERSION_SITE = 'V36';
+const VERSION_SITE = 'V38';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 
 let membreData = null;
@@ -87,6 +87,8 @@ function afficherAccueil() {
   afficherMesChiens();
   chargerHistoriquePaiementsMembre();
   chargerBoutiqueMembre();
+  document.getElementById('tabDogSittingBtn')?.classList.toggle('hidden', !membreData.accesDogSitting);
+  if (membreData.accesDogSitting) chargerDogSittingMembre();
 }
 
 function afficherRappelAbonnement() {
@@ -975,3 +977,76 @@ async function chargerHistoriquePresencesMembre() {
     </div>`;
   }).join('');
 }
+
+// ==========================================================================
+// DOG SITTING — visible uniquement si l'admin a donné l'accès. Un seul
+// chien accueilli à la fois : si la période chevauche une réservation déjà
+// validée, la demande part "en attente" et Katia doit valider elle-même.
+// ==========================================================================
+async function chargerDogSittingMembre() {
+  const selectChien = document.getElementById('ds-chien');
+  const chiensActifs = (membreData.chiens || []).filter(c => !c.archive);
+  selectChien.innerHTML = chiensActifs.map(c => `<option value="${escapeHtml(c.nom)}">${escapeHtml(c.nom)}</option>`).join('')
+    || '<option value="">Ajoutez d\'abord un chien dans "Mon chien"</option>';
+
+  await chargerMesDemandesDogSitting();
+}
+
+async function chargerMesDemandesDogSitting() {
+  const snap = await getDocs(query(collection(db, 'dogsitting'), where('membreId', '==', membreUid)));
+  const demandes = [];
+  snap.forEach(d => demandes.push(d.data()));
+  demandes.sort((a, b) => (b.dateDebut || '').localeCompare(a.dateDebut || ''));
+
+  const wrap = document.getElementById('zoneDogSitting');
+  if (demandes.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucune demande pour l\'instant.</div>';
+    return;
+  }
+  wrap.innerHTML = demandes.map(r => {
+    const badge = r.statut === 'validee' ? '<span class="badge badge-ok">Validée</span>'
+      : r.statut === 'refusee' ? '<span class="badge badge-danger">Refusée</span>'
+      : '<span class="badge badge-warn">En attente de validation (dates déjà réservées)</span>';
+    return `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(r.chienNom)} ${badge}</div>
+        <div class="data-sub">Du ${r.dateDebut} ${r.heureArrivee || ''} au ${r.dateFin} ${r.heureDepart || ''}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('ds-envoyer').addEventListener('click', async () => {
+  const statutEl = document.getElementById('ds-statut');
+  const chienNom = document.getElementById('ds-chien').value;
+  const dateDebut = document.getElementById('ds-dateDebut').value;
+  const dateFin = document.getElementById('ds-dateFin').value;
+  const heureArrivee = document.getElementById('ds-heureArrivee').value;
+  const heureDepart = document.getElementById('ds-heureDepart').value;
+
+  if (!chienNom || !dateDebut || !dateFin) { statutEl.textContent = 'Merci de remplir le chien et les deux dates.'; return; }
+  if (dateFin < dateDebut) { statutEl.textContent = 'La date de départ doit être après la date d\'arrivée.'; return; }
+
+  statutEl.textContent = 'Envoi en cours...';
+
+  // Vérifie s'il y a chevauchement avec une réservation déjà validée
+  // (tous membres confondus) : un seul chien à la fois par défaut.
+  const snap = await getDocs(query(collection(db, 'dogsitting'), where('statut', '==', 'validee')));
+  let chevauchement = false;
+  snap.forEach(d => {
+    const r = d.data();
+    if (dateDebut <= r.dateFin && r.dateDebut <= dateFin) chevauchement = true;
+  });
+
+  await addDoc(collection(db, 'dogsitting'), {
+    membreId: membreUid, chienNom, dateDebut, dateFin, heureArrivee, heureDepart,
+    statut: chevauchement ? 'attente' : 'validee',
+    dateCreation: serverTimestamp()
+  });
+
+  statutEl.textContent = chevauchement
+    ? 'Ces dates chevauchent une réservation existante : votre demande est en attente de validation par Katia.'
+    : 'Demande envoyée et validée automatiquement (aucun autre chien sur ces dates) !';
+  chargerMesDemandesDogSitting();
+});

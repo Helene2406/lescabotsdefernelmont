@@ -20,7 +20,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V36';
+const VERSION_SITE = 'V38';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
@@ -55,6 +55,7 @@ onAuthStateChanged(auth, async (user) => {
   // qu'une erreur ici ne casse jamais le reste de l'admin.
   (async () => {
     try {
+      await corrigerAbsencesAvantInscription();
       await detecterAbsencesNonRepondues();
       await traiterAbsencesAutomatiques();
       chargerCeSoir();
@@ -63,6 +64,7 @@ onAuthStateChanged(auth, async (user) => {
     }
   })();
   chargerBoutiqueAdmin();
+  chargerDogSittingAdmin();
   console.log('%c🍓 Un petit jardin secret pour toi, Katia...', 'color:#C0392B; font-size:13px;');
 });
 
@@ -516,6 +518,14 @@ function ouvrirModalMembre(membre) {
         </div>
         ${isEdit ? `<button class="btn-sm" type="button" onclick="window.ouvrirModalChien('${membre.id}', null)">+ Ajouter un chien</button>` : ''}
 
+        <h3 style="margin-top:18px;">Dog Sitting</h3>
+        <div class="field"><label>Accès à l'option Dog Sitting</label>
+          <select id="mm-accesDogSitting">
+            <option value="non" ${!isEdit || !membre?.accesDogSitting ? 'selected' : ''}>Non</option>
+            <option value="oui" ${isEdit && membre?.accesDogSitting ? 'selected' : ''}>Oui</option>
+          </select>
+        </div>
+
         <h3 style="margin-top:18px;">Groupe &amp; abonnement</h3>
         <div class="field"><label>Groupe par défaut</label><select id="mm-groupe"></select></div>
         <div class="form-grid">
@@ -576,6 +586,7 @@ function ouvrirModalMembre(membre) {
         numeroPolice: document.getElementById('mm-rcNumero').value.trim(),
         dateEcheance: document.getElementById('mm-rcEcheance').value
       },
+      accesDogSitting: document.getElementById('mm-accesDogSitting').value === 'oui',
       groupeId: document.getElementById('mm-groupe').value || null,
       coursRestants: parseInt(document.getElementById('mm-coursRestants').value, 10) || 0,
       abonnementPaye: document.getElementById('mm-aboPaye').value === 'oui',
@@ -816,7 +827,7 @@ window.ouvrirModalPaiement = (membreId) => {
             <option value="Abonnement">Abonnement</option>
             <option value="Cours individuel">Cours individuel</option>
             <option value="Séance de comportement">Séance de comportement</option>
-            <option value="Pension canine">Pension canine</option>
+            <option value="Dog Sitting">Dog Sitting</option>
             <option value="Toilettage">Toilettage</option>
             <option value="Vente diverse">Vente diverse</option>
             <option value="Autre">Autre</option>
@@ -1061,7 +1072,7 @@ const SERVICES_PAR_DEFAUT = [
   { categorie: 'Éducation canine', nom: 'Cours individuel', prix: 8, prixTexte: '', unite: 'par cours', conditions: '', prixFutur: null, dateFutur: '' },
   { categorie: 'Éducation canine', nom: 'Cotisation annuelle', prix: 70, prixTexte: '', unite: 'par an', conditions: '', prixFutur: 75, dateFutur: '2027-01-01' },
   { categorie: 'Éducation canine', nom: 'Séance de comportement individuelle', prix: 60, prixTexte: '', unite: 'par heure', conditions: '', prixFutur: null, dateFutur: '' },
-  { categorie: 'Pension canine', nom: 'Pension canine', prix: 22, prixTexte: '', unite: 'par jour', conditions: "Sous réserve d'acceptation par Katia. Le chien doit obligatoirement être castré ou stérilisé. Arrivée à partir de 14h, départ avant 12h.", prixFutur: null, dateFutur: '' },
+  { categorie: 'Dog Sitting', nom: 'Dog Sitting', prix: 22, prixTexte: '', unite: 'par jour', conditions: "Sous réserve d'acceptation par Katia. Le chien doit obligatoirement être castré ou stérilisé. Arrivée à partir de 14h, départ avant 12h.", prixFutur: null, dateFutur: '' },
   { categorie: 'Toilettage', nom: 'Toilettage pendant la pension', prix: null, prixTexte: 'Sur devis', unite: '', conditions: '', prixFutur: null, dateFutur: '' },
   { categorie: 'Toilettage', nom: 'Toilettage à la demande', prix: null, prixTexte: '40 à 60 €', unite: 'tarif sur devis', conditions: '', prixFutur: null, dateFutur: '' }
 ];
@@ -1126,7 +1137,7 @@ function ouvrirModalService(service) {
       <div class="modal-box">
         <h3>${isEdit ? 'Modifier le service' : 'Ajouter un service'}</h3>
         <div class="form-grid">
-          <div class="field"><label>Catégorie</label><input id="sv-categorie" value="${isEdit ? escapeAttr(service.categorie||'') : ''}" placeholder="ex: Éducation canine, Pension canine, Toilettage" list="sv-categories-list"></div>
+          <div class="field"><label>Catégorie</label><input id="sv-categorie" value="${isEdit ? escapeAttr(service.categorie||'') : ''}" placeholder="ex: Éducation canine, Dog Sitting, Toilettage" list="sv-categories-list"></div>
           <datalist id="sv-categories-list">
             ${[...new Set(currentServices.map(s => s.categorie))].map(c => `<option value="${escapeAttr(c)}">`).join('')}
           </datalist>
@@ -1792,6 +1803,38 @@ async function chargerAbonnementsARenouveler() {
 // même détection côté admin (qui se connecte régulièrement, elle) pour les
 // 60 derniers jours, sans dépendre de la visite du membre.
 // ==========================================================================
+// ==========================================================================
+// RÉPARATION — corrige les décomptes déjà faits à tort sur des cours
+// antérieurs à la date d'inscription du membre (bug du rattrapage 60 jours
+// avant qu'il ne tienne compte de la date d'inscription). Rembourse le
+// cours au membre puis supprime l'enregistrement erroné.
+// ==========================================================================
+async function corrigerAbsencesAvantInscription() {
+  const presSnap = await getDocs(query(collection(db, 'presences'), where('statut', '==', 'absent-auto')));
+  const aCorriger = [];
+  presSnap.forEach(d => {
+    const p = d.data();
+    const membre = currentMembres.find(m => m.id === p.uid);
+    if (!membre?.dateInscription?.toDate) return;
+    const inscriptionISO = dateISOLocale(membre.dateInscription.toDate());
+    if (p.dateISO < inscriptionISO) aCorriger.push({ id: d.id, ...p });
+  });
+  if (aCorriger.length === 0) return;
+
+  for (const p of aCorriger) {
+    if (p.compteAbonnement) {
+      const membre = currentMembres.find(m => m.id === p.uid);
+      if (membre) {
+        const soldeRembourse = (membre.coursRestants ?? 0) + 1;
+        await updateDoc(doc(db, 'membres', p.uid), { coursRestants: soldeRembourse });
+        membre.coursRestants = soldeRembourse;
+      }
+    }
+    await deleteDoc(doc(db, 'presences', p.id));
+  }
+  renderMembres();
+}
+
 async function detecterAbsencesNonRepondues() {
   const presSnap = await getDocs(collection(db, 'presences'));
   const dejaReponduCles = new Set();
@@ -1819,6 +1862,9 @@ async function detecterAbsencesNonRepondues() {
       if (!delaiDepasse) return;
 
       currentMembres.filter(m => m.groupeId === g.id).forEach(m => {
+        // On ne pénalise jamais un membre pour un cours qui a eu lieu
+        // avant sa date d'inscription au club.
+        if (m.dateInscription?.toDate && dateISO < dateISOLocale(m.dateInscription.toDate())) return;
         const cle = `${g.id}_${dateISO}_${m.id}`;
         if (!dejaReponduCles.has(cle)) {
           aCreer.push({ groupeId: g.id, uid: m.id, dateISO });
@@ -2376,4 +2422,141 @@ window.facturerPaiement = async (paiementId) => {
   } catch (err) {
     alert('Erreur lors de la génération de la facture : ' + (err.message || err) + '\n\nVérifie que ton navigateur n\'a pas bloqué le téléchargement (souvent affiché en haut de la fenêtre).');
   }
+};
+
+// ==========================================================================
+// DOG SITTING — calendrier + validation des demandes
+// Règle : un seul chien en Dog Sitting à la fois. Si la période demandée
+// chevauche une période déjà validée, la nouvelle demande reste "en attente"
+// et Katia doit la valider explicitement (2e chien accepté volontairement).
+// ==========================================================================
+let currentDogSitting = [];
+let dsMoisAffiche = new Date(); dsMoisAffiche.setDate(1);
+
+async function chargerDogSittingAdmin() {
+  const snap = await getDocs(collection(db, 'dogsitting'));
+  currentDogSitting = [];
+  snap.forEach(d => currentDogSitting.push({ id: d.id, ...d.data() }));
+  currentDogSitting.sort((a, b) => (a.dateDebut || '').localeCompare(b.dateDebut || ''));
+  renderCalendrierDogSitting();
+  renderListeDogSittingAdmin();
+}
+
+function joursOccupesDansLeMois(annee, mois) {
+  // Renvoie une map jour(1-31) -> 'validee' | 'attente' (priorité à 'attente' pour l'alerte visuelle)
+  const map = {};
+  currentDogSitting.forEach(r => {
+    if (r.statut === 'refusee') return;
+    const debut = new Date(r.dateDebut + 'T00:00:00');
+    const fin = new Date(r.dateFin + 'T00:00:00');
+    for (let d = new Date(debut); d <= fin; d.setDate(d.getDate() + 1)) {
+      if (d.getFullYear() === annee && d.getMonth() === mois) {
+        const j = d.getDate();
+        if (r.statut === 'attente' || map[j] !== 'attente') map[j] = r.statut;
+      }
+    }
+  });
+  return map;
+}
+
+function renderCalendrierDogSitting() {
+  const wrap = document.getElementById('dsCalendrier');
+  const annee = dsMoisAffiche.getFullYear();
+  const mois = dsMoisAffiche.getMonth();
+  const occupes = joursOccupesDansLeMois(annee, mois);
+
+  const premierJourSemaine = (new Date(annee, mois, 1).getDay() + 6) % 7; // lundi = 0
+  const nbJours = new Date(annee, mois + 1, 0).getDate();
+  const labelMois = dsMoisAffiche.toLocaleDateString('fr-BE', { month: 'long', year: 'numeric' });
+
+  let cases = '';
+  for (let i = 0; i < premierJourSemaine; i++) cases += '<div class="ds-case ds-vide"></div>';
+  for (let j = 1; j <= nbJours; j++) {
+    const statut = occupes[j];
+    const classe = statut === 'attente' ? 'ds-attente' : statut === 'validee' ? 'ds-occupe' : '';
+    const dateISO = `${annee}-${String(mois+1).padStart(2,'0')}-${String(j).padStart(2,'0')}`;
+    cases += `<div class="ds-case ${classe}" ${classe ? `onclick="window.voirDogSittingJour('${dateISO}')"` : ''}>${j}</div>`;
+  }
+
+  wrap.innerHTML = `
+    <div class="ds-calendrier-header">
+      <button class="btn-sm" onclick="window.dsMoisPrecedent()">◀</button>
+      <h3>${capitalize(labelMois)}</h3>
+      <button class="btn-sm" onclick="window.dsMoisSuivant()">▶</button>
+    </div>
+    <div class="ds-grille">
+      <div class="ds-jour-label">L</div><div class="ds-jour-label">M</div><div class="ds-jour-label">M</div>
+      <div class="ds-jour-label">J</div><div class="ds-jour-label">V</div><div class="ds-jour-label">S</div><div class="ds-jour-label">D</div>
+      ${cases}
+    </div>
+    <p style="font-size:0.78rem; color:var(--slate); margin-top:10px;">
+      <span style="background:#FBEFDA; padding:2px 8px; border-radius:4px;">Validé</span>
+      &nbsp; <span style="background:#FBEAEA; padding:2px 8px; border-radius:4px;">En attente / conflit</span>
+    </p>`;
+}
+
+window.dsMoisPrecedent = () => { dsMoisAffiche.setMonth(dsMoisAffiche.getMonth() - 1); renderCalendrierDogSitting(); };
+window.dsMoisSuivant = () => { dsMoisAffiche.setMonth(dsMoisAffiche.getMonth() + 1); renderCalendrierDogSitting(); };
+
+window.voirDogSittingJour = (dateISO) => {
+  const concernes = currentDogSitting.filter(r => r.statut !== 'refusee' && r.dateDebut <= dateISO && dateISO <= r.dateFin);
+  const html = `
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-box">
+        <h3>${new Date(dateISO + 'T00:00:00').toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })}</h3>
+        <div class="data-list">
+          ${concernes.map(r => {
+            const m = currentMembres.find(mm => mm.id === r.membreId);
+            return `<div class="data-row"><div class="data-main">
+              <div class="data-title">${escapeHtml(r.chienNom)} (${escapeHtml(m?.nomMaitre || '?')})</div>
+              <div class="data-sub">${r.dateDebut} ${r.heureArrivee || ''} → ${r.dateFin} ${r.heureDepart || ''} — ${r.statut === 'attente' ? '<span class="badge badge-warn">En attente</span>' : '<span class="badge badge-ok">Validé</span>'}</div>
+            </div></div>`;
+          }).join('')}
+        </div>
+        <div class="modal-actions"><button class="btn-sm" onclick="window.fermerModal()">Fermer</button></div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+};
+
+function renderListeDogSittingAdmin() {
+  const wrap = document.getElementById('listeDogSitting');
+  if (currentDogSitting.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucune demande pour l\'instant.</div>';
+    return;
+  }
+  wrap.innerHTML = currentDogSitting.map(r => {
+    const m = currentMembres.find(mm => mm.id === r.membreId);
+    const badge = r.statut === 'validee' ? '<span class="badge badge-ok">Validé</span>'
+      : r.statut === 'refusee' ? '<span class="badge badge-danger">Refusé</span>'
+      : '<span class="badge badge-warn">En attente de validation</span>';
+    return `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(m?.nomMaitre || '?')} — ${escapeHtml(r.chienNom)} ${badge}</div>
+        <div class="data-sub">Du ${r.dateDebut} ${r.heureArrivee || ''} au ${r.dateFin} ${r.heureDepart || ''}</div>
+      </div>
+      <div class="data-actions">
+        ${r.statut === 'attente' ? `
+          <button class="btn-sm primary" onclick="window.validerDogSitting('${r.id}')">Valider</button>
+          <button class="btn-sm danger" onclick="window.refuserDogSitting('${r.id}')">Refuser</button>
+        ` : ''}
+        <button class="btn-sm danger" onclick="window.supprimerDogSitting('${r.id}')">Supprimer</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.validerDogSitting = async (id) => {
+  await updateDoc(doc(db, 'dogsitting', id), { statut: 'validee' });
+  chargerDogSittingAdmin();
+};
+window.refuserDogSitting = async (id) => {
+  await updateDoc(doc(db, 'dogsitting', id), { statut: 'refusee' });
+  chargerDogSittingAdmin();
+};
+window.supprimerDogSitting = async (id) => {
+  if (!confirm('Supprimer cette demande de Dog Sitting ?')) return;
+  await deleteDoc(doc(db, 'dogsitting', id));
+  chargerDogSittingAdmin();
 };
