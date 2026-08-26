@@ -20,7 +20,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V44';
+const VERSION_SITE = 'V48';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
@@ -66,6 +66,8 @@ onAuthStateChanged(auth, async (user) => {
   chargerBoutiqueAdmin();
   chargerDogSittingAdmin();
   chargerCampagnesAdmin();
+  chargerComptaAdmin();
+  chargerNumerotationCompta();
   console.log('%c🍓 Un petit jardin secret pour toi, Katia...', 'color:#C0392B; font-size:13px;');
 });
 
@@ -1997,7 +1999,7 @@ function renderArticlesBoutiqueAdmin() {
       <div class="data-main">
         <div class="data-title">${escapeHtml(a.nom)} ${!a.actif ? '<span class="badge badge-neutral">Masqué</span>' : ''}</div>
         <div class="data-sub">${Number(a.prix).toFixed(2)} € TTC · <span class="${a.stock <= 0 ? 'badge badge-danger' : 'badge badge-ok'}">${a.stock} en stock</span></div>
-        <div class="data-sub">${a.reference ? `Réf. ${escapeHtml(a.reference)}` : ''}${a.poids ? ` · ${a.poids} g` : ''}</div>
+        <div class="data-sub">${a.reference ? `Réf. ${escapeHtml(a.reference)}` : ''}${a.poids ? ` · ${a.poids} ${a.poidsUnite || 'g'}` : ''}</div>
       </div>
       <div class="data-actions">
         <button class="btn-sm" onclick="window.editerArticleBoutique('${a.id}')">Modifier</button>
@@ -2030,7 +2032,15 @@ function ouvrirModalArticleBoutique(article) {
         <div class="field"><label>Photo (URL d'un fichier .jpg/.png, optionnel)</label><input id="ab-photoURL" value="${isEdit ? escapeAttr(article.photoURL||'') : ''}" placeholder="https://exemple.be/photo.jpg"></div>
         <div class="form-grid">
           <div class="field"><label>Référence article</label><input id="ab-reference" value="${isEdit ? escapeAttr(article.reference||'') : ''}" placeholder="ex: LAI-CUIR-01"></div>
-          <div class="field"><label>Poids (grammes)</label><input type="number" id="ab-poids" value="${isEdit ? (article.poids ?? '') : ''}" placeholder="ex: 250"></div>
+          <div class="field"><label>Poids</label>
+            <div style="display:flex; gap:6px;">
+              <input type="number" step="0.01" id="ab-poids" value="${isEdit ? (article.poids ?? '') : ''}" placeholder="ex: 250" style="flex:1;">
+              <select id="ab-poidsUnite" style="flex:none; width:75px;">
+                <option value="g" ${!isEdit || article.poidsUnite !== 'kg' ? 'selected' : ''}>g</option>
+                <option value="kg" ${isEdit && article.poidsUnite === 'kg' ? 'selected' : ''}>kg</option>
+              </select>
+            </div>
+          </div>
         </div>
         <div class="form-grid">
           <div class="field"><label>Prix TTC (€)</label><input type="number" step="0.01" id="ab-prix" value="${isEdit ? article.prix : ''}"></div>
@@ -2060,7 +2070,8 @@ function ouvrirModalArticleBoutique(article) {
       nom, prix, stock,
       photoURL: document.getElementById('ab-photoURL').value.trim(),
       reference: document.getElementById('ab-reference').value.trim(),
-      poids: document.getElementById('ab-poids').value ? parseInt(document.getElementById('ab-poids').value, 10) : null,
+      poids: document.getElementById('ab-poids').value ? parseFloat(document.getElementById('ab-poids').value) : null,
+      poidsUnite: document.getElementById('ab-poidsUnite').value,
       actif: document.getElementById('ab-actif').value === 'oui'
     };
     if (isEdit) {
@@ -2216,7 +2227,20 @@ async function prochainNumeroFacture() {
     compteur = (snap.data().dernierNumero || 0) + 1;
   }
   await setDoc(refDoc, { annee, dernierNumero: compteur });
-  return `${annee}-${String(compteur).padStart(4, '0')}`;
+  return `${annee}-${String(compteur).padStart(3, '0')}`;
+}
+
+async function prochainNumeroNC() {
+  const refDoc = doc(db, 'parametres', 'notesCredit');
+  const snap = await getDoc(refDoc);
+  const annee = new Date().getFullYear();
+  let compteur = 1;
+  if (snap.exists() && snap.data().annee === annee) {
+    compteur = (snap.data().dernierNumero || 0) + 1;
+  }
+  await setDoc(refDoc, { annee, dernierNumero: compteur });
+  const anneeCourte = String(annee).slice(-2);
+  return `NC${anneeCourte}-${String(compteur).padStart(3, '0')}`;
 }
 
 // lignes : [{ description, quantite, prixUnitaireTTC }]
@@ -2415,6 +2439,194 @@ function escaperXml(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
 }
 
+function telechargerNoteCreditPDF({ numero, dateEmission, membre, factureOrigineNumero, lignesCalc, totalHT, totalTVA, totalTTC }) {
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF();
+  let y = 20;
+
+  pdf.setFontSize(16); pdf.setFont(undefined, 'bold');
+  pdf.text(ENTREPRISE.nom, 15, y);
+  pdf.setFontSize(10); pdf.setFont(undefined, 'normal');
+  y += 6; pdf.text(ENTREPRISE.enseigne, 15, y);
+  y += 5; pdf.text(`${ENTREPRISE.adresse}, ${ENTREPRISE.codePostal} ${ENTREPRISE.ville}`, 15, y);
+  y += 5; pdf.text(`TVA ${ENTREPRISE.tva}`, 15, y);
+  y += 5; pdf.text(`${ENTREPRISE.email} — ${ENTREPRISE.tel}`, 15, y);
+
+  pdf.setFontSize(14); pdf.setFont(undefined, 'bold'); pdf.setTextColor(140, 30, 30);
+  pdf.text('NOTE DE CRÉDIT', 138, 20);
+  pdf.setTextColor(0, 0, 0);
+  pdf.setFontSize(10); pdf.setFont(undefined, 'normal');
+  pdf.text(`N° ${numero}`, 150, 27);
+  pdf.text(`Date : ${new Date(dateEmission + 'T00:00:00').toLocaleDateString('fr-BE')}`, 150, 32);
+  pdf.text(`Annule la facture n° ${factureOrigineNumero}`, 150, 37);
+
+  y = 58;
+  pdf.setFont(undefined, 'bold'); pdf.text('Client', 15, y); pdf.setFont(undefined, 'normal');
+  y += 6; pdf.text(membre?.nomMaitre || '', 15, y);
+  if (membre?.adressePostale) { y += 5; pdf.text(membre.adressePostale, 15, y); }
+  if (membre?.email) { y += 5; pdf.text(membre.email, 15, y); }
+
+  y += 12;
+  pdf.setFillColor(140, 30, 30);
+  pdf.rect(15, y, 180, 8, 'F');
+  pdf.setTextColor(255, 255, 255); pdf.setFont(undefined, 'bold'); pdf.setFontSize(9);
+  pdf.text('Description', 18, y + 5.5);
+  pdf.text('Qté', 120, y + 5.5);
+  pdf.text('PU TTC', 140, y + 5.5);
+  pdf.text('Total TTC', 168, y + 5.5);
+  pdf.setTextColor(0, 0, 0); pdf.setFont(undefined, 'normal');
+  y += 8;
+
+  lignesCalc.forEach(l => {
+    y += 8;
+    pdf.text(String(l.description).slice(0, 55), 18, y);
+    pdf.text(String(l.quantite), 120, y);
+    pdf.text('-' + l.prixUnitaireTTC.toFixed(2) + ' €', 140, y);
+    pdf.text('-' + l.totalTTC.toFixed(2) + ' €', 168, y);
+  });
+
+  y += 14;
+  pdf.line(120, y, 195, y);
+  y += 6;
+  pdf.text('Total HT :', 140, y); pdf.text('-' + totalHT.toFixed(2) + ' €', 168, y);
+  y += 6;
+  pdf.text(`TVA ${TAUX_TVA}% :`, 140, y); pdf.text('-' + totalTVA.toFixed(2) + ' €', 168, y);
+  y += 6;
+  pdf.setFont(undefined, 'bold');
+  pdf.text('Total TTC :', 140, y); pdf.text('-' + totalTTC.toFixed(2) + ' €', 168, y);
+  pdf.setFont(undefined, 'normal');
+
+  y += 20;
+  pdf.setFontSize(8); pdf.setTextColor(90, 100, 110);
+  pdf.text(`Cette note de crédit annule et remplace la facture n° ${factureOrigineNumero}.`, 15, y);
+  y += 10;
+  pdf.text(`${ENTREPRISE.nom} — TVA ${ENTREPRISE.tva} — ${ENTREPRISE.adresse}, ${ENTREPRISE.codePostal} ${ENTREPRISE.ville}`, 15, y);
+
+  pdf.save(`NoteCredit_${numero}.pdf`);
+}
+
+window.annulerFactureAvecNoteCredit = async (numeroFacture) => {
+  if (!confirm(`Annuler la facture ${numeroFacture} via une note de crédit ? Cette action génère un document officiel et ne peut pas être défaite.`)) return;
+  try {
+    const snap = await getDocs(query(collection(db, 'factures'), where('numero', '==', numeroFacture)));
+    if (snap.empty) { alert('Facture introuvable.'); return; }
+    const factureDoc = snap.docs[0];
+    const facture = factureDoc.data();
+    const membre = currentMembres.find(m => m.id === facture.membreId) || currentMembresArchives.find(m => m.id === facture.membreId);
+
+    const numeroNC = await prochainNumeroNC();
+    const dateEmission = dateISOLocale(new Date());
+
+    await addDoc(collection(db, 'notes_credit'), {
+      numero: numeroNC, factureOrigineNumero: numeroFacture, membreId: facture.membreId,
+      dateEmission, lignes: facture.lignes, totalHT: facture.totalHT, totalTVA: facture.totalTVA, totalTTC: facture.totalTTC,
+      creeLe: serverTimestamp()
+    });
+    await updateDoc(doc(db, 'factures', factureDoc.id), { statut: 'annulee', noteCreditNumero: numeroNC });
+
+    telechargerNoteCreditPDF({ numero: numeroNC, dateEmission, membre, factureOrigineNumero: numeroFacture, lignesCalc: facture.lignes, totalHT: facture.totalHT, totalTVA: facture.totalTVA, totalTTC: facture.totalTTC });
+
+    chargerComptaAdmin();
+  } catch (err) {
+    alert('Erreur : ' + (err.code || '') + ' — ' + (err.message || err));
+  }
+};
+
+window.retelechargerNoteCredit = async (numeroNC) => {
+  const snap = await getDocs(query(collection(db, 'notes_credit'), where('numero', '==', numeroNC)));
+  if (snap.empty) { alert('Note de crédit introuvable.'); return; }
+  const nc = snap.docs[0].data();
+  const membre = currentMembres.find(m => m.id === nc.membreId) || currentMembresArchives.find(m => m.id === nc.membreId);
+  telechargerNoteCreditPDF({ numero: nc.numero, dateEmission: nc.dateEmission, membre, factureOrigineNumero: nc.factureOrigineNumero, lignesCalc: nc.lignes, totalHT: nc.totalHT, totalTVA: nc.totalTVA, totalTTC: nc.totalTTC });
+};
+
+// ==========================================================================
+// COMPTA — historique factures + notes de crédit, réglage numérotation
+// ==========================================================================
+async function chargerComptaAdmin() {
+  const facturesSnap = await getDocs(collection(db, 'factures'));
+  const factures = [];
+  facturesSnap.forEach(d => factures.push({ id: d.id, type: 'facture', ...d.data() }));
+
+  const ncSnap = await getDocs(collection(db, 'notes_credit'));
+  const notesCredit = [];
+  ncSnap.forEach(d => notesCredit.push({ id: d.id, type: 'nc', ...d.data() }));
+
+  let tous = [...factures, ...notesCredit];
+  tous.sort((a, b) => (b.dateEmission || '').localeCompare(a.dateEmission || ''));
+
+  const terme = (document.getElementById('rechercheCompta')?.value || '').trim().toLowerCase();
+  if (terme) {
+    tous = tous.filter(doc => {
+      const membre = currentMembres.find(m => m.id === doc.membreId) || currentMembresArchives.find(m => m.id === doc.membreId);
+      return (membre?.nomMaitre || '').toLowerCase().includes(terme) || doc.numero.toLowerCase().includes(terme);
+    });
+  }
+
+  const wrap = document.getElementById('listeCompta');
+  if (tous.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucun document pour l\'instant.</div>';
+    return;
+  }
+
+  wrap.innerHTML = tous.map(doc => {
+    const membre = currentMembres.find(m => m.id === doc.membreId) || currentMembresArchives.find(m => m.id === doc.membreId);
+    if (doc.type === 'facture') {
+      const badge = doc.statut === 'annulee' ? '<span class="badge badge-danger">Annulée</span>' : '<span class="badge badge-ok">Facture</span>';
+      return `
+      <div class="data-row">
+        <div class="data-main">
+          <div class="data-title">${escapeHtml(doc.numero)} — ${escapeHtml(membre?.nomMaitre || '?')} ${badge}</div>
+          <div class="data-sub">${doc.dateEmission} · ${Number(doc.totalTTC).toFixed(2)} € TTC${doc.noteCreditNumero ? ` · annulée par ${escapeHtml(doc.noteCreditNumero)}` : ''}</div>
+        </div>
+        <div class="data-actions">
+          <button class="btn-sm" onclick="window.retelechargerFacture('${doc.numero}')">PDF</button>
+          ${doc.statut !== 'annulee' ? `<button class="btn-sm danger" onclick="window.annulerFactureAvecNoteCredit('${doc.numero}')">Annuler (note de crédit)</button>` : ''}
+        </div>
+      </div>`;
+    } else {
+      return `
+      <div class="data-row">
+        <div class="data-main">
+          <div class="data-title">${escapeHtml(doc.numero)} — ${escapeHtml(membre?.nomMaitre || '?')} <span class="badge badge-danger">Note de crédit</span></div>
+          <div class="data-sub">${doc.dateEmission} · -${Number(doc.totalTTC).toFixed(2)} € TTC · annule ${escapeHtml(doc.factureOrigineNumero)}</div>
+        </div>
+        <div class="data-actions">
+          <button class="btn-sm" onclick="window.retelechargerNoteCredit('${doc.numero}')">PDF</button>
+        </div>
+      </div>`;
+    }
+  }).join('');
+}
+
+document.getElementById('rechercheCompta').addEventListener('input', () => chargerComptaAdmin());
+
+async function chargerNumerotationCompta() {
+  const anneeActuelle = new Date().getFullYear();
+  const facDoc = await getDoc(doc(db, 'parametres', 'facturation'));
+  document.getElementById('cpt-facture-annee').value = facDoc.exists() ? facDoc.data().annee : anneeActuelle;
+  document.getElementById('cpt-facture-dernier').value = facDoc.exists() ? facDoc.data().dernierNumero : 0;
+
+  const ncDoc = await getDoc(doc(db, 'parametres', 'notesCredit'));
+  document.getElementById('cpt-nc-annee').value = ncDoc.exists() ? ncDoc.data().annee : anneeActuelle;
+  document.getElementById('cpt-nc-dernier').value = ncDoc.exists() ? ncDoc.data().dernierNumero : 0;
+}
+
+document.getElementById('btnSauverNumFacture').addEventListener('click', async () => {
+  const annee = parseInt(document.getElementById('cpt-facture-annee').value, 10);
+  const dernierNumero = parseInt(document.getElementById('cpt-facture-dernier').value, 10) || 0;
+  await setDoc(doc(db, 'parametres', 'facturation'), { annee, dernierNumero });
+  alert(`Enregistré. La prochaine facture générée pour ${annee} sera numérotée ${annee}-${String(dernierNumero + 1).padStart(3, '0')}.`);
+});
+
+document.getElementById('btnSauverNumNC').addEventListener('click', async () => {
+  const annee = parseInt(document.getElementById('cpt-nc-annee').value, 10);
+  const dernierNumero = parseInt(document.getElementById('cpt-nc-dernier').value, 10) || 0;
+  await setDoc(doc(db, 'parametres', 'notesCredit'), { annee, dernierNumero });
+  const anneeCourte = String(annee).slice(-2);
+  alert(`Enregistré. La prochaine note de crédit générée pour ${annee} sera numérotée NC${anneeCourte}-${String(dernierNumero + 1).padStart(3, '0')}.`);
+});
+
 window.envoyerFactureParMail = (membreId, numero) => {
   const membre = currentMembres.find(m => m.id === membreId);
   if (!membre?.email) { alert('Ce membre n\'a pas d\'adresse e-mail renseignée dans sa fiche.'); return; }
@@ -2432,6 +2644,8 @@ window.facturerCommande = async (commandeId) => {
     if (numero) {
       await updateDoc(doc(db, 'commandes', commandeId), { numeroFacture: numero });
       chargerCommandesAdmin();
+      chargerComptaAdmin();
+      chargerNumerotationCompta();
     }
   } catch (err) {
     alert('Erreur lors de la génération de la facture : ' + (err.message || err) + '\n\nVérifie que ton navigateur n\'a pas bloqué le téléchargement (souvent affiché en haut de la fenêtre).');
@@ -2447,6 +2661,8 @@ window.facturerPaiement = async (paiementId) => {
     if (numero) {
       await updateDoc(doc(db, 'paiements', paiementId), { numeroFacture: numero });
       chargerHistoriquePaiements(paiement.membreId);
+      chargerComptaAdmin();
+      chargerNumerotationCompta();
     }
   } catch (err) {
     alert('Erreur lors de la génération de la facture : ' + (err.message || err) + '\n\nVérifie que ton navigateur n\'a pas bloqué le téléchargement (souvent affiché en haut de la fenêtre).');
@@ -2573,7 +2789,7 @@ function renderListeDogSittingAdmin() {
       }
     }
 
-    const apporteLabels = { carnet: 'carnet de santé', rc: 'copie RC', couche: 'couche/panier', gamelle: 'gamelle', nourriture: 'nourriture' };
+    const apporteLabels = { carnet: 'carnet de santé', couche: 'couche/panier', gamelle: 'gamelle', nourriture: 'nourriture' };
     const apporteListe = r.apporte ? Object.keys(apporteLabels).filter(k => r.apporte[k]).map(k => apporteLabels[k]).join(', ') : '';
     const servicesListe = r.servicesDemandes ? [
       r.servicesDemandes.domicile ? 'prise/remise à domicile' : null,

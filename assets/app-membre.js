@@ -16,7 +16,7 @@ function dateISOLocale(d) {
   return `${y}-${m}-${j}`;
 }
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
-const VERSION_SITE = 'V44';
+const VERSION_SITE = 'V48';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 
 const ENTREPRISE_IBAN = 'BE58 7320 5129 6479';
@@ -765,6 +765,10 @@ async function chargerHistoriquePaiementsMembre() {
       <div class="data-main">
         <div class="data-title">${escapeHtml(p.type)} — ${Number(p.montant).toFixed(2)} € TTC</div>
         <div class="data-sub">${p.date || ''}${p.note ? ' · ' + escapeHtml(p.note) : ''}</div>
+        ${p.numeroFacture ? `<div class="data-sub">Facture n° <strong>${escapeHtml(p.numeroFacture)}</strong></div>` : ''}
+      </div>
+      <div class="data-actions">
+        ${p.numeroFacture ? `<button class="btn-sm" onclick="window.telechargerMaFacture('${p.numeroFacture}')">Télécharger ma facture</button>` : ''}
       </div>
     </div>`).join('');
 }
@@ -812,7 +816,7 @@ async function chargerBoutiqueMembre() {
           ${a.photoURL ? `<img src="${escapeHtml(a.photoURL)}" style="width:52px; height:52px; border-radius:6px; object-fit:cover; flex:none;">` : ''}
           <div class="data-main">
             <div class="data-title">${escapeHtml(a.nom)}</div>
-            <div class="data-sub">${Number(a.prix).toFixed(2)} € TTC · ${a.stock > 0 ? `${a.stock} en stock` : '<span class="badge badge-danger">Rupture de stock</span>'}</div>
+            <div class="data-sub">${a.poids ? `${a.poids} ${a.poidsUnite || 'g'} · ` : ''}${Number(a.prix).toFixed(2)} € TTC · ${a.stock > 0 ? `${a.stock} en stock` : '<span class="badge badge-danger">Rupture de stock</span>'}</div>
           </div>
           <div class="data-actions">
             <button class="btn-sm primary" ${a.stock <= 0 ? 'disabled' : ''} onclick="window.ajouterAuPanier('${a.id}', '${escapeHtml(a.nom)}', ${a.prix}, ${a.stock})">Ajouter au panier</button>
@@ -903,6 +907,10 @@ async function chargerMesCommandes() {
       <div class="data-main">
         <div class="data-title">${Number(c.total).toFixed(2)} € TTC ${badge}</div>
         <div class="data-sub">${detail}</div>
+        ${c.numeroFacture ? `<div class="data-sub">Facture n° <strong>${escapeHtml(c.numeroFacture)}</strong></div>` : ''}
+      </div>
+      <div class="data-actions">
+        ${c.numeroFacture ? `<button class="btn-sm" onclick="window.telechargerMaFacture('${c.numeroFacture}')">Télécharger ma facture</button>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -1077,7 +1085,6 @@ document.getElementById('ds-envoyer').addEventListener('click', async () => {
 
   const apporte = {
     carnet: document.getElementById('ds-apporte-carnet').checked,
-    rc: document.getElementById('ds-apporte-rc').checked,
     couche: document.getElementById('ds-apporte-couche').checked,
     gamelle: document.getElementById('ds-apporte-gamelle').checked,
     nourriture: document.getElementById('ds-apporte-nourriture').checked
@@ -1092,32 +1099,36 @@ document.getElementById('ds-envoyer').addEventListener('click', async () => {
 
   statutEl.textContent = 'Envoi en cours...';
 
-  // Vérifie s'il y a chevauchement avec une réservation déjà validée
-  // (tous membres confondus) : un seul chien à la fois par défaut.
-  const snap = await getDocs(query(collection(db, 'dogsitting'), where('statut', '==', 'validee')));
-  let chevauchement = false;
-  snap.forEach(d => {
-    const r = d.data();
-    if (dateDebut <= r.dateFin && r.dateDebut <= dateFin) chevauchement = true;
-  });
+  try {
+    // Vérifie s'il y a chevauchement avec une réservation déjà validée
+    // (tous membres confondus) : un seul chien à la fois par défaut.
+    const snap = await getDocs(query(collection(db, 'dogsitting'), where('statut', '==', 'validee')));
+    let chevauchement = false;
+    snap.forEach(d => {
+      const r = d.data();
+      if (dateDebut <= r.dateFin && r.dateDebut <= dateFin) chevauchement = true;
+    });
 
-  const prixJour = await prixDogSittingParJour();
-  const nbJours = nbJoursDogSitting(dateDebut, dateFin);
-  const total = prixJour * nbJours;
-  const acompte = Math.round(total * TAUX_ACOMPTE_DOGSITTING_MEMBRE * 100) / 100;
+    const prixJour = await prixDogSittingParJour();
+    const nbJours = nbJoursDogSitting(dateDebut, dateFin);
+    const total = prixJour * nbJours;
+    const acompte = Math.round(total * TAUX_ACOMPTE_DOGSITTING_MEMBRE * 100) / 100;
 
-  await addDoc(collection(db, 'dogsitting'), {
-    membreId: membreUid, chienNom, dateDebut, dateFin, heureArrivee, heureDepart,
-    apporte, servicesDemandes, habitudesDeVie,
-    statut: chevauchement ? 'attente' : 'validee',
-    total, acompte, acomptePaye: false, acompteValide: false,
-    dateCreation: serverTimestamp()
-  });
+    await addDoc(collection(db, 'dogsitting'), {
+      membreId: membreUid, chienNom, dateDebut, dateFin, heureArrivee, heureDepart,
+      apporte, servicesDemandes, habitudesDeVie,
+      statut: chevauchement ? 'attente' : 'validee',
+      total, acompte, acomptePaye: false, acompteValide: false,
+      dateCreation: serverTimestamp()
+    });
 
-  statutEl.textContent = chevauchement
-    ? 'Ces dates chevauchent une réservation existante : votre demande est en attente de validation par Katia.'
-    : 'Demande envoyée et validée automatiquement (aucun autre chien sur ces dates) !';
-  chargerMesDemandesDogSitting();
+    statutEl.textContent = chevauchement
+      ? 'Ces dates chevauchent une réservation existante : votre demande est en attente de validation par Katia.'
+      : 'Demande envoyée et validée automatiquement (aucun autre chien sur ces dates) !';
+    chargerMesDemandesDogSitting();
+  } catch (err) {
+    statutEl.textContent = 'Erreur : ' + (err.code || '') + ' — ' + (err.message || err);
+  }
 });
 
 // ==========================================================================
@@ -1219,3 +1230,93 @@ function afficherSurpriseAnniversaireKatia() {
   const main = document.querySelector('.app-main');
   if (main) main.insertBefore(banniere, main.firstChild);
 }
+
+// ==========================================================================
+// TÉLÉCHARGER MA FACTURE — régénère le même PDF que l'admin, à partir des
+// données déjà stockées dans 'factures' (aucun nouvel envoi de mail requis :
+// le membre a directement accès à ses propres factures depuis son espace).
+// ==========================================================================
+const ENTREPRISE_MEMBRE = {
+  nom: 'LES BEAUX CABOTS SRL',
+  adresse: 'Rue Grande 26',
+  codePostal: '4219',
+  ville: 'Wasseiges (Meeffe)',
+  tva: 'BE0729593814',
+  email: 'cabotsdefernelmont@gmail.com',
+  tel: '0032 494 05 17 96',
+  iban: ENTREPRISE_IBAN,
+  bic: ENTREPRISE_BIC
+};
+const TAUX_TVA_MEMBRE = 21;
+
+window.telechargerMaFacture = async (numeroFacture) => {
+  const snap = await getDocs(query(collection(db, 'factures'), where('numero', '==', numeroFacture)));
+  if (snap.empty) { alert('Facture introuvable.'); return; }
+  const facture = snap.docs[0].data();
+
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF();
+  let y = 20;
+
+  pdf.setFontSize(16); pdf.setFont(undefined, 'bold');
+  pdf.text(ENTREPRISE_MEMBRE.nom, 15, y);
+  pdf.setFontSize(10); pdf.setFont(undefined, 'normal');
+  y += 6; pdf.text('Les Cabots de Fernelmont', 15, y);
+  y += 5; pdf.text(`${ENTREPRISE_MEMBRE.adresse}, ${ENTREPRISE_MEMBRE.codePostal} ${ENTREPRISE_MEMBRE.ville}`, 15, y);
+  y += 5; pdf.text(`TVA ${ENTREPRISE_MEMBRE.tva}`, 15, y);
+  y += 5; pdf.text(`${ENTREPRISE_MEMBRE.email} — ${ENTREPRISE_MEMBRE.tel}`, 15, y);
+
+  pdf.setFontSize(14); pdf.setFont(undefined, 'bold');
+  pdf.text('FACTURE', 150, 20);
+  pdf.setFontSize(10); pdf.setFont(undefined, 'normal');
+  pdf.text(`N° ${facture.numero}`, 150, 27);
+  pdf.text(`Date : ${new Date(facture.dateEmission + 'T00:00:00').toLocaleDateString('fr-BE')}`, 150, 32);
+
+  y = 55;
+  pdf.setFont(undefined, 'bold'); pdf.text('Client', 15, y); pdf.setFont(undefined, 'normal');
+  y += 6; pdf.text(membreData.nomMaitre || '', 15, y);
+  if (membreData.adressePostale) { y += 5; pdf.text(membreData.adressePostale, 15, y); }
+  if (membreData.email) { y += 5; pdf.text(membreData.email, 15, y); }
+
+  y += 12;
+  pdf.setFillColor(27, 58, 92);
+  pdf.rect(15, y, 180, 8, 'F');
+  pdf.setTextColor(255, 255, 255); pdf.setFont(undefined, 'bold'); pdf.setFontSize(9);
+  pdf.text('Description', 18, y + 5.5);
+  pdf.text('Qté', 120, y + 5.5);
+  pdf.text('PU TTC', 140, y + 5.5);
+  pdf.text('Total TTC', 168, y + 5.5);
+  pdf.setTextColor(0, 0, 0); pdf.setFont(undefined, 'normal');
+  y += 8;
+
+  (facture.lignes || []).forEach(l => {
+    y += 8;
+    pdf.text(String(l.description).slice(0, 55), 18, y);
+    pdf.text(String(l.quantite), 120, y);
+    pdf.text(l.prixUnitaireTTC.toFixed(2) + ' €', 140, y);
+    pdf.text(l.totalTTC.toFixed(2) + ' €', 168, y);
+  });
+
+  y += 14;
+  pdf.line(120, y, 195, y);
+  y += 6;
+  pdf.text('Total HT :', 140, y); pdf.text(facture.totalHT.toFixed(2) + ' €', 168, y);
+  y += 6;
+  pdf.text(`TVA ${TAUX_TVA_MEMBRE}% :`, 140, y); pdf.text(facture.totalTVA.toFixed(2) + ' €', 168, y);
+  y += 6;
+  pdf.setFont(undefined, 'bold');
+  pdf.text('Total TTC :', 140, y); pdf.text(facture.totalTTC.toFixed(2) + ' €', 168, y);
+  pdf.setFont(undefined, 'normal');
+
+  y += 14;
+  pdf.setFontSize(9);
+  pdf.text(`À payer sur le compte ${ENTREPRISE_MEMBRE.iban} (BIC ${ENTREPRISE_MEMBRE.bic}) — communication : ${facture.numero}`, 15, y);
+
+  y += 14;
+  pdf.setFontSize(8); pdf.setTextColor(90, 100, 110);
+  pdf.text('Facture soumise aux Conditions Générales de Vente disponibles sur le site du club.', 15, y);
+  y += 10;
+  pdf.text(`${ENTREPRISE_MEMBRE.nom} — TVA ${ENTREPRISE_MEMBRE.tva} — ${ENTREPRISE_MEMBRE.adresse}, ${ENTREPRISE_MEMBRE.codePostal} ${ENTREPRISE_MEMBRE.ville}`, 15, y);
+
+  pdf.save(`Facture_${facture.numero}.pdf`);
+};
