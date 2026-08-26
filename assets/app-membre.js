@@ -16,8 +16,12 @@ function dateISOLocale(d) {
   return `${y}-${m}-${j}`;
 }
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
-const VERSION_SITE = 'V41';
+const VERSION_SITE = 'V44';
 document.getElementById('versionTag').textContent = VERSION_SITE;
+
+const ENTREPRISE_IBAN = 'BE58 7320 5129 6479';
+const ENTREPRISE_BIC = 'CREGBEBB';
+const TAUX_ACOMPTE_DOGSITTING_MEMBRE = 0.30;
 
 let membreData = null;
 let membreUid = null;
@@ -994,10 +998,23 @@ async function chargerDogSittingMembre() {
   await chargerMesDemandesDogSitting();
 }
 
+async function prixDogSittingParJour() {
+  const snap = await getDocs(query(collection(db, 'services'), where('categorie', '==', 'Dog Sitting')));
+  let prix = 22; // valeur par défaut si le service n'a pas encore été configuré
+  snap.forEach(d => { if (typeof d.data().prix === 'number') prix = d.data().prix; });
+  return prix;
+}
+
+function nbJoursDogSitting(dateDebut, dateFin) {
+  const d1 = new Date(dateDebut + 'T00:00:00');
+  const d2 = new Date(dateFin + 'T00:00:00');
+  return Math.max(1, Math.round((d2 - d1) / (1000 * 60 * 60 * 24)) + 1);
+}
+
 async function chargerMesDemandesDogSitting() {
   const snap = await getDocs(query(collection(db, 'dogsitting'), where('membreId', '==', membreUid)));
   const demandes = [];
-  snap.forEach(d => demandes.push(d.data()));
+  snap.forEach(d => demandes.push({ id: d.id, ...d.data() }));
   demandes.sort((a, b) => (b.dateDebut || '').localeCompare(a.dateDebut || ''));
 
   const wrap = document.getElementById('zoneDogSitting');
@@ -1009,15 +1026,42 @@ async function chargerMesDemandesDogSitting() {
     const badge = r.statut === 'validee' ? '<span class="badge badge-ok">Validée</span>'
       : r.statut === 'refusee' ? '<span class="badge badge-danger">Refusée</span>'
       : '<span class="badge badge-warn">En attente de validation (dates déjà réservées)</span>';
+
+    let blocAcompte = '';
+    if (r.statut === 'validee' && r.acompte) {
+      const communication = `Dog Sitting ${r.chienNom} ${r.dateDebut}`;
+      if (r.acompteValide) {
+        blocAcompte = `<div style="margin-top:8px;"><span class="badge badge-ok">✅ Date bloquée — acompte reçu et validé</span></div>`;
+      } else {
+        blocAcompte = `
+          <div class="banner-alert" style="margin-top:8px;">
+            Un acompte de <strong>30%</strong> est requis pour bloquer définitivement ces dates : <strong>${r.acompte.toFixed(2)} €</strong> (sur un total estimé de ${r.total.toFixed(2)} €).<br>
+            À verser sur : <strong>${ENTREPRISE_IBAN}</strong> (BIC ${ENTREPRISE_BIC})<br>
+            Communication : <strong>${escapeHtml(communication)}</strong>
+            <div class="presence-btns" style="margin-top:8px;">
+              ${r.acomptePaye
+                ? '<span class="badge badge-ok">Vous avez indiqué avoir payé</span> <span class="badge badge-warn">En attente de validation par Katia</span>'
+                : `<button class="btn-sm primary" onclick="window.signalerAcomptePaye('${r.id}')">J'ai payé l'acompte</button>`}
+            </div>
+          </div>`;
+      }
+    }
+
     return `
     <div class="data-row">
       <div class="data-main">
         <div class="data-title">${escapeHtml(r.chienNom)} ${badge}</div>
         <div class="data-sub">Du ${r.dateDebut} ${r.heureArrivee || ''} au ${r.dateFin} ${r.heureDepart || ''}</div>
+        ${blocAcompte}
       </div>
     </div>`;
   }).join('');
 }
+
+window.signalerAcomptePaye = async (reservationId) => {
+  await updateDoc(doc(db, 'dogsitting', reservationId), { acomptePaye: true });
+  chargerMesDemandesDogSitting();
+};
 
 document.getElementById('ds-envoyer').addEventListener('click', async () => {
   const statutEl = document.getElementById('ds-statut');
@@ -1029,6 +1073,22 @@ document.getElementById('ds-envoyer').addEventListener('click', async () => {
 
   if (!chienNom || !dateDebut || !dateFin) { statutEl.textContent = 'Merci de remplir le chien et les deux dates.'; return; }
   if (dateFin < dateDebut) { statutEl.textContent = 'La date de départ doit être après la date d\'arrivée.'; return; }
+  if (!document.getElementById('ds-consentement').checked) { statutEl.textContent = 'Merci de confirmer avoir pris connaissance des conditions (case à cocher en bas du formulaire).'; return; }
+
+  const apporte = {
+    carnet: document.getElementById('ds-apporte-carnet').checked,
+    rc: document.getElementById('ds-apporte-rc').checked,
+    couche: document.getElementById('ds-apporte-couche').checked,
+    gamelle: document.getElementById('ds-apporte-gamelle').checked,
+    nourriture: document.getElementById('ds-apporte-nourriture').checked
+  };
+  const servicesDemandes = {
+    domicile: document.getElementById('ds-service-domicile').checked,
+    balades: document.getElementById('ds-service-balades').checked,
+    reeducation: document.getElementById('ds-service-reeducation').checked,
+    toilettage: document.getElementById('ds-service-toilettage').value
+  };
+  const habitudesDeVie = document.getElementById('ds-habitudes').value.trim();
 
   statutEl.textContent = 'Envoi en cours...';
 
@@ -1041,9 +1101,16 @@ document.getElementById('ds-envoyer').addEventListener('click', async () => {
     if (dateDebut <= r.dateFin && r.dateDebut <= dateFin) chevauchement = true;
   });
 
+  const prixJour = await prixDogSittingParJour();
+  const nbJours = nbJoursDogSitting(dateDebut, dateFin);
+  const total = prixJour * nbJours;
+  const acompte = Math.round(total * TAUX_ACOMPTE_DOGSITTING_MEMBRE * 100) / 100;
+
   await addDoc(collection(db, 'dogsitting'), {
     membreId: membreUid, chienNom, dateDebut, dateFin, heureArrivee, heureDepart,
+    apporte, servicesDemandes, habitudesDeVie,
     statut: chevauchement ? 'attente' : 'validee',
+    total, acompte, acomptePaye: false, acompteValide: false,
     dateCreation: serverTimestamp()
   });
 

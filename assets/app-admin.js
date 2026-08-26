@@ -20,7 +20,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V41';
+const VERSION_SITE = 'V44';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
@@ -2200,9 +2200,12 @@ const ENTREPRISE = {
   pays: 'Belgique',
   tva: 'BE0729593814',
   email: 'cabotsdefernelmont@gmail.com',
-  tel: '0032 494 05 17 96'
+  tel: '0032 494 05 17 96',
+  iban: 'BE58 7320 5129 6479',
+  bic: 'CREGBEBB'
 };
 const TAUX_TVA = 21;
+const TAUX_ACOMPTE_DOGSITTING = 0.30; // 30% d'acompte exigé pour le Dog Sitting
 
 async function prochainNumeroFacture() {
   const refDoc = doc(db, 'parametres', 'facturation');
@@ -2310,7 +2313,11 @@ function telechargerFacturePDF({ numero, dateEmission, membre, lignesCalc, total
   pdf.text('Total TTC :', 140, y); pdf.text(totalTTC.toFixed(2) + ' €', 168, y);
   pdf.setFont(undefined, 'normal');
 
-  y += 20;
+  y += 14;
+  pdf.setFontSize(9);
+  pdf.text(`À payer sur le compte ${ENTREPRISE.iban} (BIC ${ENTREPRISE.bic}) — communication : ${numero}`, 15, y);
+
+  y += 14;
   pdf.setFontSize(8); pdf.setTextColor(90, 100, 110);
   pdf.text('Facture soumise aux Conditions Générales de Vente disponibles sur le site du club.', 15, y);
   y += 5;
@@ -2465,16 +2472,19 @@ async function chargerDogSittingAdmin() {
 }
 
 function joursOccupesDansLeMois(annee, mois) {
-  // Renvoie une map jour(1-31) -> 'validee' | 'attente' (priorité à 'attente' pour l'alerte visuelle)
+  // Renvoie une map jour(1-31) -> 'bloque' (acompte validé) | 'validee' (approuvé, acompte pas encore validé) | 'attente'
+  // Priorité d'affichage : attente > validee > bloque (pour ne jamais masquer un conflit).
   const map = {};
   currentDogSitting.forEach(r => {
     if (r.statut === 'refusee') return;
+    const statutCase = r.statut === 'attente' ? 'attente' : (r.acompteValide ? 'bloque' : 'validee');
     const debut = new Date(r.dateDebut + 'T00:00:00');
     const fin = new Date(r.dateFin + 'T00:00:00');
     for (let d = new Date(debut); d <= fin; d.setDate(d.getDate() + 1)) {
       if (d.getFullYear() === annee && d.getMonth() === mois) {
         const j = d.getDate();
-        if (r.statut === 'attente' || map[j] !== 'attente') map[j] = r.statut;
+        const ordre = { attente: 2, validee: 1, bloque: 0 };
+        if (!map[j] || ordre[statutCase] > ordre[map[j]]) map[j] = statutCase;
       }
     }
   });
@@ -2495,7 +2505,7 @@ function renderCalendrierDogSitting() {
   for (let i = 0; i < premierJourSemaine; i++) cases += '<div class="ds-case ds-vide"></div>';
   for (let j = 1; j <= nbJours; j++) {
     const statut = occupes[j];
-    const classe = statut === 'attente' ? 'ds-attente' : statut === 'validee' ? 'ds-occupe' : '';
+    const classe = statut === 'attente' ? 'ds-attente' : statut === 'bloque' ? 'ds-bloque' : statut === 'validee' ? 'ds-occupe' : '';
     const dateISO = `${annee}-${String(mois+1).padStart(2,'0')}-${String(j).padStart(2,'0')}`;
     cases += `<div class="ds-case ${classe}" ${classe ? `onclick="window.voirDogSittingJour('${dateISO}')"` : ''}>${j}</div>`;
   }
@@ -2512,7 +2522,8 @@ function renderCalendrierDogSitting() {
       ${cases}
     </div>
     <p style="font-size:0.78rem; color:var(--slate); margin-top:10px;">
-      <span style="background:#FBEFDA; padding:2px 8px; border-radius:4px;">Validé</span>
+      <span style="background:#DCEEE0; padding:2px 8px; border-radius:4px;">Bloqué (acompte validé)</span>
+      &nbsp; <span style="background:#FBEFDA; padding:2px 8px; border-radius:4px;">Validé, acompte en attente</span>
       &nbsp; <span style="background:#FBEAEA; padding:2px 8px; border-radius:4px;">En attente / conflit</span>
     </p>`;
 }
@@ -2552,17 +2563,48 @@ function renderListeDogSittingAdmin() {
     const badge = r.statut === 'validee' ? '<span class="badge badge-ok">Validé</span>'
       : r.statut === 'refusee' ? '<span class="badge badge-danger">Refusé</span>'
       : '<span class="badge badge-warn">En attente de validation</span>';
+
+    let infoAcompte = '';
+    if (r.statut === 'validee' && r.acompte) {
+      if (r.acompteValide) {
+        infoAcompte = `<div class="data-sub"><span class="badge badge-ok">✅ Acompte validé — date bloquée</span></div>`;
+      } else {
+        infoAcompte = `<div class="data-sub">Acompte attendu : <strong>${r.acompte.toFixed(2)} €</strong> (30% de ${r.total.toFixed(2)} €) ${r.acomptePaye ? '<span class="badge badge-warn">Membre indique avoir payé</span>' : '<span class="badge badge-neutral">Pas encore signalé</span>'}</div>`;
+      }
+    }
+
+    const apporteLabels = { carnet: 'carnet de santé', rc: 'copie RC', couche: 'couche/panier', gamelle: 'gamelle', nourriture: 'nourriture' };
+    const apporteListe = r.apporte ? Object.keys(apporteLabels).filter(k => r.apporte[k]).map(k => apporteLabels[k]).join(', ') : '';
+    const servicesListe = r.servicesDemandes ? [
+      r.servicesDemandes.domicile ? 'prise/remise à domicile' : null,
+      r.servicesDemandes.balades ? 'balades' : null,
+      r.servicesDemandes.reeducation ? 'rééducation' : null,
+      r.servicesDemandes.toilettage || null
+    ].filter(Boolean).join(', ') : '';
+
+    let detailFiche = '';
+    if (apporteListe || servicesListe || r.habitudesDeVie) {
+      detailFiche = `<div class="data-sub">
+        ${apporteListe ? `Apporte : ${escapeHtml(apporteListe)}<br>` : ''}
+        ${servicesListe ? `Services en plus : ${escapeHtml(servicesListe)}<br>` : ''}
+        ${r.habitudesDeVie ? `Habitudes de vie : <em>${escapeHtml(r.habitudesDeVie)}</em>` : ''}
+      </div>`;
+    }
+
     return `
     <div class="data-row">
       <div class="data-main">
         <div class="data-title">${escapeHtml(m?.nomMaitre || '?')} — ${escapeHtml(r.chienNom)} ${badge}</div>
         <div class="data-sub">Du ${r.dateDebut} ${r.heureArrivee || ''} au ${r.dateFin} ${r.heureDepart || ''}</div>
+        ${infoAcompte}
+        ${detailFiche}
       </div>
       <div class="data-actions">
         ${r.statut === 'attente' ? `
           <button class="btn-sm primary" onclick="window.validerDogSitting('${r.id}')">Valider</button>
           <button class="btn-sm danger" onclick="window.refuserDogSitting('${r.id}')">Refuser</button>
         ` : ''}
+        ${r.statut === 'validee' && r.acompte && !r.acompteValide ? `<button class="btn-sm primary" onclick="window.validerAcompteDogSitting('${r.id}')">Valider l'acompte (bloque la date)</button>` : ''}
         <button class="btn-sm danger" onclick="window.supprimerDogSitting('${r.id}')">Supprimer</button>
       </div>
     </div>`;
@@ -2571,6 +2613,10 @@ function renderListeDogSittingAdmin() {
 
 window.validerDogSitting = async (id) => {
   await updateDoc(doc(db, 'dogsitting', id), { statut: 'validee' });
+  chargerDogSittingAdmin();
+};
+window.validerAcompteDogSitting = async (id) => {
+  await updateDoc(doc(db, 'dogsitting', id), { acompteValide: true });
   chargerDogSittingAdmin();
 };
 window.refuserDogSitting = async (id) => {
