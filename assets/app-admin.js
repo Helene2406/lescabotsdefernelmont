@@ -20,7 +20,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V55';
+const VERSION_SITE = 'V56';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
@@ -3347,7 +3347,7 @@ document.getElementById('btnPublierNouvelleVersionRoi').addEventListener('click'
 async function chargerEnquetesAnonymesAdmin() {
   const wrap = document.getElementById('listeEnquetesAnonymes');
   if (!wrap) return;
-  const snap = await getDocs(collection(db, 'enquetes_anonymes'));
+  const snap = await getDocs(collection(db, 'enquetes_renseignements'));
   const reponses = [];
   snap.forEach(d => reponses.push(d.data()));
 
@@ -3359,7 +3359,7 @@ async function chargerEnquetesAnonymesAdmin() {
   wrap.innerHTML = reponses.map((r, i) => `
     <div class="data-row">
       <div class="data-main">
-        <div class="data-title">Réponse anonyme n°${i + 1}</div>
+        <div class="data-title">${r.identifiant ? `${escapeHtml(r.identifiant)}${r.chienNom ? ' — ' + escapeHtml(r.chienNom) : ''}` : `Réponse anonyme n°${i + 1}`}</div>
         <div class="data-sub">
           Âge : ${escapeHtml(r.age || '—')} · Race : ${escapeHtml(r.race || '—')} (${escapeHtml(r.sexe || '—')})<br>
           Élevage : ${escapeHtml(r.elevage || '—')} · Retrait à ${escapeHtml(String(r.ageRetrait || '—'))} semaines<br>
