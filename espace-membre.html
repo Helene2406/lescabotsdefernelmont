@@ -41,6 +41,13 @@
 
   <!-- ==================== ACCUEIL ==================== -->
   <div id="panel-accueil" class="tab-panel">
+    <div class="app-panel" id="blocNotifications">
+      <h2>🔔 Notifications</h2>
+      <p style="color:var(--slate); font-size:0.85rem; margin-bottom:10px;">Recevez une notification de votre navigateur pour les nouveaux messages de Katia et les nouveaux articles du blog — tant que cette page reste ouverte dans un onglet (même en arrière-plan).</p>
+      <button class="btn-sm primary" id="btnActiverNotifs">Activer les notifications</button>
+      <p id="notifsStatut" style="font-size:0.85rem; color:var(--slate); margin-top:8px;"></p>
+    </div>
+
     <div class="app-panel">
       <h2>Mon abonnement</h2>
       <div id="badgesAbo"></div>
@@ -48,18 +55,25 @@
       <div id="zoneCotisation" style="margin-top:12px;"></div>
     </div>
 
-    <div class="app-panel">
+    <div class="app-panel" id="panelGroupeWrap">
       <h2>Mon groupe</h2>
       <div class="data-list" id="zoneGroupe"><div class="empty-state">...</div></div>
     </div>
 
-    <div class="app-panel">
+    <div class="app-panel" id="panelCoursWrap">
       <h2>Mes deux prochains cours</h2>
       <div class="banner-alert" style="margin-bottom:14px;">
         ⏱️ Merci de répondre au plus tard <strong>24h avant le début du cours</strong>. Passé ce délai, vous serez automatiquement considéré(e) comme absent(e) et le cours sera comptabilisé dans votre abonnement.
       </div>
       <p style="color: var(--slate); font-size: 0.88rem; margin-bottom: 14px;">Une fois votre réponse envoyée, seule Katia peut la modifier.</p>
       <div class="data-list" id="zoneCours"><div class="empty-state">...</div></div>
+    </div>
+
+    <div class="app-panel hidden" id="blocBoutiqueEnAvant">
+      <h2>🛍️ Notre boutique</h2>
+      <p style="color:var(--slate); font-size:0.85rem; margin-bottom:14px;">Vous n'êtes pas rattaché(e) à un groupe de cours — voici un aperçu de nos articles disponibles. Retrouvez la boutique complète dans l'onglet dédié.</p>
+      <div class="data-list" id="zoneApercuBoutique"><div class="empty-state">...</div></div>
+      <button class="btn-sm primary" id="btnVoirBoutiqueComplete" style="margin-top:12px;">Voir toute la boutique</button>
     </div>
   </div>
 
@@ -287,6 +301,10 @@
     const chevron = document.getElementById('ds-conditions-chevron');
     texte.classList.toggle('hidden');
     chevron.textContent = texte.classList.contains('hidden') ? '▾' : '▴';
+  });
+
+  document.getElementById('btnVoirBoutiqueComplete')?.addEventListener('click', () => {
+    document.querySelector('.tab-btn[data-tab="boutique"]').click();
   });
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>

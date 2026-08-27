@@ -41,7 +41,7 @@
   <div class="container">
     <span class="eyebrow">À propos</span>
     <h1>Le Club</h1>
-    <p class="lead">Un club canin familial, où chaque duo maître-chien avance à son rythme.</p>
+    <p class="lead" data-contenu-id="club_lead">Un club canin familial, où chaque duo maître-chien avance à son rythme.</p>
   </div>
 </section>
 
@@ -51,12 +51,12 @@
       <div>
         <div class="info-block">
           <h2>Notre philosophie</h2>
-          <p>Les Cabots de Fernelmont, c'est avant tout une approche douce et respectueuse du chien. Nous croyons qu'une bonne éducation canine se construit sur la confiance, la patience et la compréhension mutuelle — jamais sur la contrainte.</p>
-          <p>Nos cours se donnent à Andenne, en petits groupes, pour permettre à Katia de suivre chaque chien et chaque maître de façon personnalisée.</p>
+          <p data-contenu-id="club_philo_p1">Les Cabots de Fernelmont, c'est avant tout une approche douce et respectueuse du chien. Nous croyons qu'une bonne éducation canine se construit sur la confiance, la patience et la compréhension mutuelle — jamais sur la contrainte.</p>
+          <p data-contenu-id="club_philo_p2">Nos cours se donnent à Andenne, en petits groupes, pour permettre à Katia de suivre chaque chien et chaque maître de façon personnalisée.</p>
         </div>
         <div class="info-block">
           <h2>Ce que propose le club</h2>
-          <p>Au-delà des cours collectifs, le club propose également la vente d'accessoires, du toilettage et la garde de chiens à domicile pendant les vacances des maîtres.</p>
+          <p data-contenu-id="club_propose_texte">Au-delà des cours collectifs, le club propose également la vente d'accessoires, du toilettage et la garde de chiens à domicile pendant les vacances des maîtres.</p>
           <ul class="tag-list">
             <li>Cours collectifs</li>
             <li>Cours individuels</li>
@@ -65,7 +65,7 @@
             <li>Garde à domicile</li>
           </ul>
         </div>
-        <blockquote class="pull-quote">
+        <blockquote class="pull-quote" data-contenu-id="club_citation">
           Chaque chien avance à son rythme — notre rôle est de l'accompagner, pas de le forcer.
         </blockquote>
       </div>
@@ -147,5 +147,6 @@
     toggle.setAttribute('aria-expanded', isOpen);
   });
 </script>
+<script type="module" src="assets/contenu-dynamique.js"></script>
 </body>
 </html>

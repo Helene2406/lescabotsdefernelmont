@@ -132,5 +132,10 @@ service cloud.firestore {
       allow create, update: if estConnecte() && request.resource.data.membreId == request.auth.uid;
       allow delete: if estConnecte() && (resource.data.membreId == request.auth.uid || estAdmin());
     }
+
+    match /contenu_site/{id} {
+      allow read: if true;
+      allow write: if estAdmin();
+    }
   }
 }

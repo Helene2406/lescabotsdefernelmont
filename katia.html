@@ -41,7 +41,7 @@
   <div class="container">
     <span class="eyebrow">Portrait</span>
     <h1>Katia</h1>
-    <p class="lead">Fondatrice et éducatrice canine du club Les Cabots de Fernelmont.</p>
+    <p class="lead" data-contenu-id="katia_lead">Fondatrice et éducatrice canine du club Les Cabots de Fernelmont.</p>
   </div>
 </section>
 
@@ -51,15 +51,15 @@
       <div>
         <div class="info-block">
           <h2>Une passion devenue métier</h2>
-          <p>Depuis plus de 10 ans, Katia se consacre à l'éducation canine avec une conviction simple : chaque chien mérite d'être compris avant d'être corrigé. Fondatrice des Cabots de Fernelmont, elle a bâti le club autour de méthodes douces, respectueuses du rythme et de la sensibilité de chaque animal.</p>
-          <p>Elle accompagne aujourd'hui de nombreux duos maîtres-chiens à Andenne, en cours collectifs comme en séances individuelles, et propose également toilettage, conseils sur les accessoires et garde de chiens à domicile.</p>
+          <p data-contenu-id="katia_bio_p1">Depuis plus de 10 ans, Katia se consacre à l'éducation canine avec une conviction simple : chaque chien mérite d'être compris avant d'être corrigé. Fondatrice des Cabots de Fernelmont, elle a bâti le club autour de méthodes douces, respectueuses du rythme et de la sensibilité de chaque animal.</p>
+          <p data-contenu-id="katia_bio_p2">Elle accompagne aujourd'hui de nombreux duos maîtres-chiens à Andenne, en cours collectifs comme en séances individuelles, et propose également toilettage, conseils sur les accessoires et garde de chiens à domicile.</p>
         </div>
-        <blockquote class="pull-quote">
+        <blockquote class="pull-quote" data-contenu-id="katia_citation">
           Un chien qui comprend ce qu'on attend de lui est un chien qui a confiance.
         </blockquote>
         <div class="info-block">
           <h2>Ses trois complices</h2>
-          <p>Katia partage aussi son quotidien avec ses propres chiens — Olga, Pistache et Cookie — qui l'accompagnent parfois lors des cours.</p>
+          <p data-contenu-id="katia_complices_texte">Katia partage aussi son quotidien avec ses propres chiens — Olga, Pistache et Cookie — qui l'accompagnent parfois lors des cours.</p>
           <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-top:16px; max-width:420px;">
             <div style="text-align:center;">
               <img src="assets/olga.jpg" alt="Olga, chienne de Katia" style="width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:50%; border:2px solid var(--brass-light);">
@@ -134,5 +134,6 @@
     toggle.setAttribute('aria-expanded', isOpen);
   });
 </script>
+<script type="module" src="assets/contenu-dynamique.js"></script>
 </body>
 </html>
