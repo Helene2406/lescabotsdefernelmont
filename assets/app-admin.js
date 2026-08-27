@@ -22,7 +22,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V57';
+const VERSION_SITE = 'V58';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
@@ -2245,12 +2245,6 @@ window.annulerCommande = async (commandeId) => {
   if (!confirm('Annuler cette commande ? Le stock ne sera pas touché.')) return;
   await updateDoc(doc(db, 'commandes', commandeId), { statut: 'annulee' });
   chargerCommandesAdmin();
-};
-
-window.enregistrerNumeroFacture = async (commandeId) => {
-  const numero = document.getElementById('fact-' + commandeId).value.trim();
-  await updateDoc(doc(db, 'commandes', commandeId), { numeroFacture: numero });
-  alert('N° de facture enregistré.');
 };
 
 // ==========================================================================

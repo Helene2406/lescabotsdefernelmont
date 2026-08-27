@@ -16,7 +16,7 @@ function dateISOLocale(d) {
   return `${y}-${m}-${j}`;
 }
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
-const VERSION_SITE = 'V57';
+const VERSION_SITE = 'V58';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 
 const ENTREPRISE_IBAN = 'BE58 7320 5129 6479';
@@ -1488,10 +1488,12 @@ async function chargerRoiMembre() {
   document.getElementById('roi-zoneTexte').textContent = texte || 'Le règlement sera bientôt disponible ici.';
 
   const dejaApprouve = (membreData.reglementVersionApprouvee || 0) >= version;
-  document.getElementById('tabReglementBtn')?.classList.toggle('has-unread', !dejaApprouve);
+  document.getElementById('tabReglementBtn')?.classList.toggle('has-unread', !!texte && !dejaApprouve);
 
   const zoneApprobation = document.getElementById('roi-zoneApprobation');
-  if (dejaApprouve) {
+  if (!texte) {
+    zoneApprobation.innerHTML = '';
+  } else if (dejaApprouve) {
     const dateLabel = membreData.reglementApprouveLe ? new Date(membreData.reglementApprouveLe + 'T00:00:00').toLocaleDateString('fr-BE') : '';
     zoneApprobation.innerHTML = `<span class="badge badge-ok">✅ Vous avez approuvé ce règlement (version ${version})${dateLabel ? ' le ' + dateLabel : ''}</span>`;
   } else {
