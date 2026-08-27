@@ -20,7 +20,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V48';
+const VERSION_SITE = 'V50';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
@@ -68,6 +68,7 @@ onAuthStateChanged(auth, async (user) => {
   chargerCampagnesAdmin();
   chargerComptaAdmin();
   chargerNumerotationCompta();
+  chargerContenuAdmin();
   console.log('%c🍓 Un petit jardin secret pour toi, Katia...', 'color:#C0392B; font-size:13px;');
 });
 
@@ -1727,29 +1728,41 @@ async function chargerAnniversaires() {
   const zone = document.getElementById('anniversairesDuJour');
   if (!zone) return;
   const aujourdhui = new Date();
-  const dansUneSemaine = new Date();
-  dansUneSemaine.setDate(aujourdhui.getDate() + 7);
+  const debutJourAuj = new Date(aujourdhui.getFullYear(), aujourdhui.getMonth(), aujourdhui.getDate());
+  const demain = new Date(debutJourAuj); demain.setDate(demain.getDate() + 1);
 
-  const proches = currentMembres.filter(m => {
-    if (!m.dateAnniversaire) return false;
-    const parts = m.dateAnniversaire.split('-').map(Number);
-    const mois = parts[1], jour = parts[2];
+  // Fenêtre stricte : la veille + le jour même (pas une semaine entière).
+  function estVeilleOuJourJ(mois, jour) {
     let candidate = new Date(aujourdhui.getFullYear(), mois - 1, jour);
-    const debutJourAuj = new Date(aujourdhui.getFullYear(), aujourdhui.getMonth(), aujourdhui.getDate());
-    if (candidate < debutJourAuj) {
-      candidate = new Date(aujourdhui.getFullYear() + 1, mois - 1, jour);
+    if (candidate < debutJourAuj) candidate = new Date(aujourdhui.getFullYear() + 1, mois - 1, jour);
+    return candidate.getTime() === debutJourAuj.getTime() || candidate.getTime() === demain.getTime();
+  }
+
+  const lignes = [];
+  currentMembres.forEach(m => {
+    if (m.dateAnniversaire) {
+      const parts = m.dateAnniversaire.split('-').map(Number);
+      if (estVeilleOuJourJ(parts[1], parts[2])) {
+        const estAuj = new Date(aujourdhui.getFullYear(), parts[1]-1, parts[2]).getTime() === debutJourAuj.getTime();
+        lignes.push(`🎂 ${escapeHtml(m.nomMaitre)} — ${parts[2]}/${parts[1]} ${estAuj ? '<strong>(aujourd\'hui !)</strong>' : '(demain)'}`);
+      }
     }
-    return candidate <= dansUneSemaine;
+    (m.chiens || []).filter(c => !c.archive).forEach(c => {
+      if (!c.naissance) return;
+      const parts = c.naissance.split('-').map(Number);
+      if (estVeilleOuJourJ(parts[1], parts[2])) {
+        const estAuj = new Date(aujourdhui.getFullYear(), parts[1]-1, parts[2]).getTime() === debutJourAuj.getTime();
+        lignes.push(`🐾 ${escapeHtml(c.nom)} (${escapeHtml(m.nomMaitre)}) — ${parts[2]}/${parts[1]} ${estAuj ? '<strong>(aujourd\'hui !)</strong>' : '(demain)'}`);
+      }
+    });
   });
 
-  if (proches.length === 0) { zone.innerHTML = ''; return; }
+  if (lignes.length === 0) { zone.innerHTML = ''; return; }
 
   zone.innerHTML = `
     <div class="banner-alert">
-      🎂 Anniversaire${proches.length > 1 ? 's' : ''} à venir : ${proches.map(m => {
-        const parts = m.dateAnniversaire.split('-').map(Number);
-        return `${escapeHtml(m.nomMaitre)} (${parts[2]}/${parts[1]})`;
-      }).join(', ')}
+      🎉 Anniversaire${lignes.length > 1 ? 's' : ''} :<br>
+      ${lignes.join('<br>')}
     </div>`;
 }
 
@@ -1772,13 +1785,14 @@ async function chargerCotisationsARenouveler() {
 
   zone.innerHTML = `
     <div class="banner-alert">
-      💳 Cotisation${concernes.length > 1 ? 's' : ''} à renouveler bientôt : ${concernes.map(m => {
+      💳 Cotisation${concernes.length > 1 ? 's' : ''} à renouveler bientôt :<br>
+      ${concernes.map(m => {
         const echeance = new Date(m.cotisationDateEcheance + 'T00:00:00');
         const enRetard = echeance < aujourdhui;
         const reponse = m.cotisationRenouvellement === 'oui' ? ' (a dit oui — facture 70€ TTC possible)'
           : m.cotisationRenouvellement === 'non' ? ' (a dit non)' : ' (pas encore répondu)';
         return `${escapeHtml(m.nomMaitre)}${enRetard ? ' — échue' : ''}${reponse}`;
-      }).join(', ')}
+      }).join('<br>')}
     </div>`;
 }
 
@@ -1797,12 +1811,13 @@ async function chargerAbonnementsARenouveler() {
 
   zone.innerHTML = `
     <div class="banner-alert">
-      📚 Abonnement${concernes.length > 1 ? 's' : ''} bientôt épuisé${concernes.length > 1 ? 's' : ''} : ${concernes.map(m => {
+      📚 Abonnement${concernes.length > 1 ? 's' : ''} bientôt épuisé${concernes.length > 1 ? 's' : ''} :<br>
+      ${concernes.map(m => {
         const epuise = (m.coursRestants ?? 0) <= 0;
         const reponse = m.abonnementRenouvellement === 'oui' ? ` (a dit oui — facture ${prixAbonnement.toFixed(2)}€ TTC pour 11 cours possible)`
           : m.abonnementRenouvellement === 'non' ? ' (a dit non)' : ' (pas encore répondu)';
         return `${escapeHtml(m.nomMaitre)} — ${m.coursRestants ?? 0} cours restant(s)${epuise ? ', épuisé' : ''}${reponse}`;
-      }).join(', ')}
+      }).join('<br>')}
     </div>`;
 }
 
@@ -1963,7 +1978,7 @@ async function chargerVaccinsARappeler() {
   });
 
   if (lignes.length === 0) { zone.innerHTML = ''; return; }
-  zone.innerHTML = `<div class="banner-alert">💉 Vaccins à surveiller : ${lignes.join(', ')}</div>`;
+  zone.innerHTML = `<div class="banner-alert">💉 Vaccins à surveiller :<br>${lignes.join('<br>')}</div>`;
 }
 
 // ==========================================================================
@@ -1995,11 +2010,13 @@ function renderArticlesBoutiqueAdmin() {
   }
   wrap.innerHTML = currentArticlesBoutique.map(a => `
     <div class="data-row">
-      ${a.photoURL ? `<img src="${escapeAttr(a.photoURL)}" style="width:52px; height:52px; border-radius:6px; object-fit:cover; flex:none;">` : ''}
-      <div class="data-main">
-        <div class="data-title">${escapeHtml(a.nom)} ${!a.actif ? '<span class="badge badge-neutral">Masqué</span>' : ''}</div>
-        <div class="data-sub">${Number(a.prix).toFixed(2)} € TTC · <span class="${a.stock <= 0 ? 'badge badge-danger' : 'badge badge-ok'}">${a.stock} en stock</span></div>
-        <div class="data-sub">${a.reference ? `Réf. ${escapeHtml(a.reference)}` : ''}${a.poids ? ` · ${a.poids} ${a.poidsUnite || 'g'}` : ''}</div>
+      <div class="data-row-left">
+        ${a.photoURL ? `<img class="data-thumb" src="${escapeAttr(a.photoURL)}">` : ''}
+        <div class="data-main">
+          <div class="data-title">${escapeHtml(a.nom)} ${!a.actif ? '<span class="badge badge-neutral">Masqué</span>' : ''}</div>
+          <div class="data-sub">${Number(a.prix).toFixed(2)} € TTC · <span class="${a.stock <= 0 ? 'badge badge-danger' : 'badge badge-ok'}">${a.stock} en stock</span></div>
+          <div class="data-sub">${a.reference ? `Réf. ${escapeHtml(a.reference)}` : ''}${a.poids ? ` · ${a.poids} ${a.poidsUnite || 'g'}` : ''}</div>
+        </div>
       </div>
       <div class="data-actions">
         <button class="btn-sm" onclick="window.editerArticleBoutique('${a.id}')">Modifier</button>
@@ -2995,4 +3012,78 @@ window.voirPrecommandes = async (campagneId) => {
       </div>
     </div>`;
   document.getElementById('modalZone').innerHTML = html;
+};
+
+// ==========================================================================
+// CONTENU DU SITE — permet à Katia de modifier les textes des pages
+// publiques (Accueil, Le Club, Activités, Katia) sans toucher au code.
+// Chaque champ a un identifiant unique (data-contenu-id dans le HTML) et un
+// texte par défaut (celui d'origine) affiché tant qu'aucune modification
+// n'a été enregistrée.
+// ==========================================================================
+const CHAMPS_CONTENU = [
+  { page: 'Accueil', champs: [
+    { id: 'accueil_eyebrow', label: 'Petit texte au-dessus du titre', defaut: "Centre d'éducation canine — Région d'Andenne" },
+    { id: 'accueil_titre', label: 'Titre principal', defaut: 'Une relation de confiance entre vous et votre chien, construite pas à pas.' },
+    { id: 'accueil_lead', label: 'Sous-titre', defaut: "Les Cabots de Fernelmont accompagnent maîtres et chiens avec des méthodes douces et respectueuses, autour de Katia, éducatrice canine depuis plus de 10 ans." },
+    { id: 'accueil_section2_titre', label: 'Titre section "Le club en un coup d\'œil"', defaut: 'Un club à taille humaine, pensé pour progresser ensemble' },
+    { id: 'accueil_section2_texte', label: 'Texte de cette section', defaut: "Chaque cours est pensé pour créer un vrai lien entre vous et votre chien — dans le respect de son rythme et du vôtre." },
+    { id: 'accueil_cta_titre', label: 'Titre bandeau final', defaut: 'Envie de rejoindre le club ?' },
+    { id: 'accueil_cta_texte', label: 'Texte bandeau final', defaut: 'Contactez-nous par téléphone ou par mail — nous répondons volontiers à toutes vos questions sur les cours et les inscriptions.' },
+  ]},
+  { page: 'Le Club', champs: [
+    { id: 'club_lead', label: 'Sous-titre', defaut: 'Un club canin familial, où chaque duo maître-chien avance à son rythme.' },
+    { id: 'club_philo_p1', label: 'Philosophie — 1er paragraphe', defaut: "Les Cabots de Fernelmont, c'est avant tout une approche douce et respectueuse du chien. Nous croyons qu'une bonne éducation canine se construit sur la confiance, la patience et la compréhension mutuelle — jamais sur la contrainte." },
+    { id: 'club_philo_p2', label: 'Philosophie — 2e paragraphe', defaut: 'Nos cours se donnent à Andenne, en petits groupes, pour permettre à Katia de suivre chaque chien et chaque maître de façon personnalisée.' },
+    { id: 'club_propose_texte', label: '"Ce que propose le club" — texte', defaut: "Au-delà des cours collectifs, le club propose également la vente d'accessoires, du toilettage et la garde de chiens à domicile pendant les vacances des maîtres." },
+    { id: 'club_citation', label: 'Citation mise en avant', defaut: "Chaque chien avance à son rythme — notre rôle est de l'accompagner, pas de le forcer." },
+  ]},
+  { page: 'Activités', champs: [
+    { id: 'activites_lead', label: 'Sous-titre', defaut: 'Cinq axes de travail pour progresser avec votre chien, à chaque étape de son développement.' },
+    { id: 'activite1_titre', label: 'Activité 1 — titre', defaut: 'Obéissance' },
+    { id: 'activite1_texte', label: 'Activité 1 — texte', defaut: 'Les bases essentielles pour un chien équilibré au quotidien : rappel, marche en laisse, positions et self-control, enseignés avec des méthodes douces.' },
+    { id: 'activite2_titre', label: 'Activité 2 — titre', defaut: 'Socialisation' },
+    { id: 'activite2_texte', label: 'Activité 2 — texte', defaut: "Des rencontres encadrées avec d'autres chiens et d'autres maîtres pour apprendre à votre compagnon à évoluer sereinement dans son environnement." },
+    { id: 'activite3_titre', label: 'Activité 3 — titre', defaut: 'Agility' },
+    { id: 'activite3_texte', label: 'Activité 3 — texte', defaut: 'Un parcours d\'obstacles ludique qui renforce la complicité entre le chien et son maître, tout en développant agilité et concentration.' },
+    { id: 'activite4_titre', label: 'Activité 4 — titre', defaut: 'Confiance au chien' },
+    { id: 'activite4_texte', label: 'Activité 4 — texte', defaut: "Un travail spécifique pour aider les chiens craintifs ou peu sûrs d'eux à gagner en assurance, à leur rythme et en douceur." },
+    { id: 'activite5_titre', label: 'Activité 5 — titre', defaut: 'Rapport chien-maître' },
+    { id: 'activite5_texte', label: 'Activité 5 — texte', defaut: 'Renforcer la communication et la complicité entre vous et votre chien, pour une relation basée sur la confiance mutuelle.' },
+  ]},
+  { page: 'Katia', champs: [
+    { id: 'katia_lead', label: 'Sous-titre', defaut: 'Fondatrice et éducatrice canine du club Les Cabots de Fernelmont.' },
+    { id: 'katia_bio_p1', label: 'Biographie — 1er paragraphe', defaut: "Depuis plus de 10 ans, Katia se consacre à l'éducation canine avec une conviction simple : chaque chien mérite d'être compris avant d'être corrigé. Fondatrice des Cabots de Fernelmont, elle a bâti le club autour de méthodes douces, respectueuses du rythme et de la sensibilité de chaque animal." },
+    { id: 'katia_bio_p2', label: 'Biographie — 2e paragraphe', defaut: 'Elle accompagne aujourd\'hui de nombreux duos maîtres-chiens à Andenne, en cours collectifs comme en séances individuelles, et propose également toilettage, conseils sur les accessoires et garde de chiens à domicile.' },
+    { id: 'katia_citation', label: 'Citation mise en avant', defaut: "Un chien qui comprend ce qu'on attend de lui est un chien qui a confiance." },
+    { id: 'katia_complices_texte', label: '"Ses trois complices" — texte', defaut: "Katia partage aussi son quotidien avec ses propres chiens — Olga, Pistache et Cookie — qui l'accompagnent parfois lors des cours." },
+  ]},
+];
+
+async function chargerContenuAdmin() {
+  const wrap = document.getElementById('zoneContenu');
+  if (!wrap) return;
+  const snap = await getDocs(collection(db, 'contenu_site'));
+  const valeurs = {};
+  snap.forEach(d => { valeurs[d.id] = d.data().texte; });
+
+  wrap.innerHTML = CHAMPS_CONTENU.map(section => `
+    <h3 style="margin-top:20px;">${escapeHtml(section.page)}</h3>
+    ${section.champs.map(c => `
+      <div class="field" style="margin-bottom:14px;">
+        <label>${escapeHtml(c.label)}</label>
+        <textarea id="ct-${c.id}" rows="2" style="width:100%; box-sizing:border-box; resize:vertical;">${escapeHtml(valeurs[c.id] ?? c.defaut)}</textarea>
+        <button class="btn-sm" style="margin-top:4px;" onclick="window.sauverContenu('${c.id}')">Enregistrer</button>
+        <span id="ct-statut-${c.id}" style="font-size:0.8rem; color:var(--slate); margin-left:8px;"></span>
+      </div>`).join('')}
+  `).join('');
+}
+
+window.sauverContenu = async (champId) => {
+  const texte = document.getElementById(`ct-${champId}`).value;
+  const statutEl = document.getElementById(`ct-statut-${champId}`);
+  statutEl.textContent = 'Enregistrement...';
+  await setDoc(doc(db, 'contenu_site', champId), { texte });
+  statutEl.textContent = 'Enregistré ✓';
+  setTimeout(() => { statutEl.textContent = ''; }, 2500);
 };

@@ -12,7 +12,7 @@ import {
   getFirestore,
   doc, getDoc, getDocFromServer, setDoc, updateDoc, deleteDoc,
   collection, addDoc, getDocs, query, where, orderBy,
-  serverTimestamp
+  serverTimestamp, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -32,7 +32,7 @@ export {
   signInWithEmailAndPassword, signOut, onAuthStateChanged,
   doc, getDoc, getDocFromServer, setDoc, updateDoc, deleteDoc,
   collection, addDoc, getDocs, query, where, orderBy,
-  serverTimestamp
+  serverTimestamp, onSnapshot
 };
 
 // Les identifiants membres/admin ne sont pas de vraies adresses e-mail.

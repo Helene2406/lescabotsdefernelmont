@@ -235,6 +235,24 @@
 .data-row .data-sub { color: var(--slate); font-size: 0.82rem; margin-top: 2px; }
 .data-row .data-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
+.data-row-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+.data-thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  object-position: center;
+  border-radius: 8px;
+  flex: none;
+  background: var(--paper-warm);
+  border: 1px solid #E3E7EB;
+}
+
 .btn-sm {
   padding: 7px 12px;
   font-size: 0.82rem;

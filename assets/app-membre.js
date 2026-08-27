@@ -1,6 +1,6 @@
 import {
   auth, db, onAuthStateChanged, signOut,
-  doc, getDoc, getDocAvecReessai, setDoc, getDocs, collection, addDoc, updateDoc, query, orderBy, where, serverTimestamp
+  doc, getDoc, getDocAvecReessai, setDoc, getDocs, collection, addDoc, updateDoc, query, orderBy, where, serverTimestamp, onSnapshot
 } from "./firebase-config.js";
 import { meteoPour, alerteMeteo, iconeCode } from "./meteo.js";
 
@@ -16,7 +16,7 @@ function dateISOLocale(d) {
   return `${y}-${m}-${j}`;
 }
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
-const VERSION_SITE = 'V48';
+const VERSION_SITE = 'V50';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 
 const ENTREPRISE_IBAN = 'BE58 7320 5129 6479';
@@ -52,7 +52,13 @@ onAuthStateChanged(auth, async (user) => {
       await afficherProchainsCours();
     }
   } else {
-    document.getElementById('zoneGroupe').innerHTML = '<div class="empty-state">Vous n\'êtes rattaché à aucun groupe pour l\'instant. Contactez Katia.</div>';
+    // Membre sans groupe (ex : uniquement Dog Sitting et/ou Boutique) :
+    // les panneaux "Mon groupe" et "Mes prochains cours" n'ont pas de sens,
+    // on les masque et on met la Boutique en avant à la place.
+    document.getElementById('panelGroupeWrap').classList.add('hidden');
+    document.getElementById('panelCoursWrap').classList.add('hidden');
+    document.getElementById('blocBoutiqueEnAvant').classList.remove('hidden');
+    afficherApercuBoutique();
   }
 
   chargerServicesMembre();
@@ -63,6 +69,7 @@ onAuthStateChanged(auth, async (user) => {
   chargerVideosMembre();
   chargerBlogMembre();
   chargerHistoriquePresencesMembre();
+  initNotifications();
 });
 
 document.getElementById('chatSendMembre').addEventListener('click', envoyerMessageMembre);
@@ -813,10 +820,12 @@ async function chargerBoutiqueMembre() {
     } else {
       wrap.innerHTML = articles.map(a => `
         <div class="data-row">
-          ${a.photoURL ? `<img src="${escapeHtml(a.photoURL)}" style="width:52px; height:52px; border-radius:6px; object-fit:cover; flex:none;">` : ''}
-          <div class="data-main">
-            <div class="data-title">${escapeHtml(a.nom)}</div>
-            <div class="data-sub">${a.poids ? `${a.poids} ${a.poidsUnite || 'g'} · ` : ''}${Number(a.prix).toFixed(2)} € TTC · ${a.stock > 0 ? `${a.stock} en stock` : '<span class="badge badge-danger">Rupture de stock</span>'}</div>
+          <div class="data-row-left">
+            ${a.photoURL ? `<img class="data-thumb" src="${escapeHtml(a.photoURL)}">` : ''}
+            <div class="data-main">
+              <div class="data-title">${escapeHtml(a.nom)}</div>
+              <div class="data-sub">${a.poids ? `${a.poids} ${a.poidsUnite || 'g'} · ` : ''}${Number(a.prix).toFixed(2)} € TTC · ${a.stock > 0 ? `${a.stock} en stock` : '<span class="badge badge-danger">Rupture de stock</span>'}</div>
+            </div>
           </div>
           <div class="data-actions">
             <button class="btn-sm primary" ${a.stock <= 0 ? 'disabled' : ''} onclick="window.ajouterAuPanier('${a.id}', '${escapeHtml(a.nom)}', ${a.prix}, ${a.stock})">Ajouter au panier</button>
@@ -830,6 +839,31 @@ async function chargerBoutiqueMembre() {
 
   afficherPanier();
   chargerMesCommandes();
+}
+
+// Aperçu simplifié de quelques articles, pour la page d'accueil des membres
+// qui ne sont rattachés à aucun groupe (Dog Sitting / Boutique uniquement).
+async function afficherApercuBoutique() {
+  const wrap = document.getElementById('zoneApercuBoutique');
+  if (!wrap) return;
+  const snap = await getDocs(query(collection(db, 'articles_boutique'), where('actif', '==', true)));
+  const articles = [];
+  snap.forEach(d => articles.push({ id: d.id, ...d.data() }));
+
+  if (articles.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucun article disponible pour l\'instant.</div>';
+    return;
+  }
+  wrap.innerHTML = articles.slice(0, 4).map(a => `
+    <div class="data-row">
+      <div class="data-row-left">
+        ${a.photoURL ? `<img class="data-thumb" src="${escapeHtml(a.photoURL)}">` : ''}
+        <div class="data-main">
+          <div class="data-title">${escapeHtml(a.nom)}</div>
+          <div class="data-sub">${Number(a.prix).toFixed(2)} € TTC</div>
+        </div>
+      </div>
+    </div>`).join('');
 }
 
 window.ajouterAuPanier = (articleId, nom, prix, stock) => {
@@ -1320,3 +1354,76 @@ window.telechargerMaFacture = async (numeroFacture) => {
 
   pdf.save(`Facture_${facture.numero}.pdf`);
 };
+
+// ==========================================================================
+// NOTIFICATIONS NAVIGATEUR — pas de vraies notifications "push" façon appli
+// mobile (ça demanderait un service payant), mais tant que cette page reste
+// ouverte dans un onglet (même en arrière-plan), on peut alerter le membre
+// en temps réel pour un nouveau message ou un nouvel article.
+// ==========================================================================
+let notifsActives = false;
+let premierChargementArticles = true;
+let dernierNbArticlesConnu = null;
+
+function initNotifications() {
+  const btn = document.getElementById('btnActiverNotifs');
+  const statutEl = document.getElementById('notifsStatut');
+  if (!btn) return;
+
+  if (!('Notification' in window)) {
+    statutEl.textContent = 'Ton navigateur ne supporte pas les notifications.';
+    btn.disabled = true;
+    return;
+  }
+
+  if (Notification.permission === 'granted') {
+    activerEcouteNotifications();
+    btn.textContent = 'Notifications activées ✓';
+    btn.disabled = true;
+  } else if (Notification.permission === 'denied') {
+    statutEl.textContent = 'Les notifications sont bloquées pour ce site — active-les dans les réglages de ton navigateur si tu changes d\'avis.';
+  }
+
+  btn.addEventListener('click', async () => {
+    const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+      activerEcouteNotifications();
+      btn.textContent = 'Notifications activées ✓';
+      btn.disabled = true;
+      statutEl.textContent = '';
+    } else {
+      statutEl.textContent = 'Notifications refusées. Tu peux réessayer en cliquant à nouveau, ou les activer depuis les réglages du navigateur.';
+    }
+  });
+}
+
+function activerEcouteNotifications() {
+  if (notifsActives) return;
+  notifsActives = true;
+
+  // Nouveau message de Katia
+  onSnapshot(doc(db, 'conversations', membreUid), (snap) => {
+    if (snap.exists() && snap.data().nonLuMembre) {
+      new Notification('Les Beaux Cabots', {
+        body: '💬 Nouveau message de Katia !',
+        icon: 'assets/logo.png'
+      });
+    }
+  });
+
+  // Nouvel article sur le blog
+  onSnapshot(collection(db, 'articles'), (snap) => {
+    if (premierChargementArticles) {
+      premierChargementArticles = false;
+      dernierNbArticlesConnu = snap.size;
+      return;
+    }
+    if (dernierNbArticlesConnu !== null && snap.size > dernierNbArticlesConnu) {
+      new Notification('Les Beaux Cabots', {
+        body: '📰 Un nouvel article a été publié sur le blog du club !',
+        icon: 'assets/logo.png'
+      });
+    }
+    dernierNbArticlesConnu = snap.size;
+  });
+}
