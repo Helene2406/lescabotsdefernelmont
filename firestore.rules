@@ -152,10 +152,12 @@ service cloud.firestore {
       allow write: if estAdmin();
     }
 
-    match /enquetes_anonymes/{id} {
-      // Volontairement anonyme : personne (même l'admin) ne peut lier une
-      // réponse à un membre précis. Création libre pour tout connecté,
-      // aucune mise à jour ni lien avec un uid ne sont autorisés.
+    match /enquetes_renseignements/{id} {
+      // Identifié par défaut (identifiant + nom du chien), mais le membre
+      // peut cocher "anonymiser" pour retirer ces deux informations avant
+      // l'envoi. Lecture réservée à l'admin uniquement (jamais visible par
+      // les autres membres). Aucune modification/suppression une fois
+      // envoyé, pour garder l'intégrité des réponses.
       allow read: if estAdmin();
       allow create: if estConnecte();
       allow update, delete: if false;
