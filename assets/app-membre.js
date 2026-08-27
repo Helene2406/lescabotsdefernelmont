@@ -16,7 +16,7 @@ function dateISOLocale(d) {
   return `${y}-${m}-${j}`;
 }
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
-const VERSION_SITE = 'V50';
+const VERSION_SITE = 'V51';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 
 const ENTREPRISE_IBAN = 'BE58 7320 5129 6479';
@@ -286,6 +286,10 @@ window.repondrePresence = async (dateISO, statut) => {
   });
   afficherProchainsCours();
 };
+
+function formaterPoids(poids, unite) {
+  return unite === 'kg' ? Number(poids).toFixed(2) : poids;
+}
 
 function escapeHtml(str) {
   if (!str) return '';
@@ -807,6 +811,7 @@ function alerteVaccinsChien(chien) {
 // BOUTIQUE — panier local puis commande à valider par l'admin
 // ==========================================================================
 let panierLocal = [];
+let mesDemandesDogSittingIds = [];
 
 async function chargerBoutiqueMembre() {
   const wrap = document.getElementById('zoneArticlesBoutique');
@@ -814,6 +819,7 @@ async function chargerBoutiqueMembre() {
     const snap = await getDocs(query(collection(db, 'articles_boutique'), where('actif', '==', true)));
     const articles = [];
     snap.forEach(d => articles.push({ id: d.id, ...d.data() }));
+    articles.sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
 
     if (articles.length === 0) {
       wrap.innerHTML = '<div class="empty-state">Aucun article disponible pour l\'instant.</div>';
@@ -824,7 +830,7 @@ async function chargerBoutiqueMembre() {
             ${a.photoURL ? `<img class="data-thumb" src="${escapeHtml(a.photoURL)}">` : ''}
             <div class="data-main">
               <div class="data-title">${escapeHtml(a.nom)}</div>
-              <div class="data-sub">${a.poids ? `${a.poids} ${a.poidsUnite || 'g'} · ` : ''}${Number(a.prix).toFixed(2)} € TTC · ${a.stock > 0 ? `${a.stock} en stock` : '<span class="badge badge-danger">Rupture de stock</span>'}</div>
+              <div class="data-sub">${a.poids ? `${formaterPoids(a.poids, a.poidsUnite)} ${a.poidsUnite || 'g'} · ` : ''}${Number(a.prix).toFixed(2)} € TTC · ${a.stock > 0 ? `${a.stock} en stock` : '<span class="badge badge-danger">Rupture de stock</span>'}</div>
             </div>
           </div>
           <div class="data-actions">
@@ -849,6 +855,7 @@ async function afficherApercuBoutique() {
   const snap = await getDocs(query(collection(db, 'articles_boutique'), where('actif', '==', true)));
   const articles = [];
   snap.forEach(d => articles.push({ id: d.id, ...d.data() }));
+  articles.sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
 
   if (articles.length === 0) {
     wrap.innerHTML = '<div class="empty-state">Aucun article disponible pour l\'instant.</div>';
@@ -1059,6 +1066,10 @@ async function chargerMesDemandesDogSitting() {
   snap.forEach(d => demandes.push({ id: d.id, ...d.data() }));
   demandes.sort((a, b) => (b.dateDebut || '').localeCompare(a.dateDebut || ''));
 
+  const nonVues = demandes.filter(r => r.vuParMembre === false);
+  mesDemandesDogSittingIds = demandes.map(r => r.id);
+  document.getElementById('tabDogSittingBtn')?.classList.toggle('has-unread', nonVues.length > 0);
+
   const wrap = document.getElementById('zoneDogSitting');
   if (demandes.length === 0) {
     wrap.innerHTML = '<div class="empty-state">Aucune demande pour l\'instant.</div>';
@@ -1152,7 +1163,7 @@ document.getElementById('ds-envoyer').addEventListener('click', async () => {
       membreId: membreUid, chienNom, dateDebut, dateFin, heureArrivee, heureDepart,
       apporte, servicesDemandes, habitudesDeVie,
       statut: chevauchement ? 'attente' : 'validee',
-      total, acompte, acomptePaye: false, acompteValide: false,
+      total, acompte, acomptePaye: false, acompteValide: false, vuParMembre: true,
       dateCreation: serverTimestamp()
     });
 
@@ -1427,3 +1438,11 @@ function activerEcouteNotifications() {
     dernierNbArticlesConnu = snap.size;
   });
 }
+
+window.marquerDogSittingVu = async () => {
+  if (mesDemandesDogSittingIds.length === 0) return;
+  await Promise.all(mesDemandesDogSittingIds.map(id =>
+    updateDoc(doc(db, 'dogsitting', id), { vuParMembre: true })
+  ));
+  document.getElementById('tabDogSittingBtn')?.classList.remove('has-unread');
+};

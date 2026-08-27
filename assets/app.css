@@ -528,7 +528,7 @@
   cursor: default;
 }
 .ds-case.ds-vide { background: transparent; }
-.ds-case.ds-occupe { background: #FBEFDA; color: #7A5410; font-weight: 600; cursor: pointer; }
+.ds-case.ds-occupe { background: #FFE58A; color: #7A5410; font-weight: 700; cursor: pointer; }
 .ds-case.ds-bloque { background: #DCEEE0; color: #1D5C33; font-weight: 700; cursor: pointer; }
 .ds-case.ds-attente { background: #FBEAEA; color: #8A2E2E; font-weight: 600; cursor: pointer; }
 

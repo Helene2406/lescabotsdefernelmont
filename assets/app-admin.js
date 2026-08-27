@@ -20,7 +20,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V50';
+const VERSION_SITE = 'V51';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
@@ -1054,6 +1054,10 @@ window.reactiverCours = async (groupeId, dateISO) => {
 };
 
 // ---------- Utils ----------
+function formaterPoids(poids, unite) {
+  return unite === 'kg' ? Number(poids).toFixed(2) : poids;
+}
+
 function escapeHtml(str) {
   if (!str) return '';
   return str.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1998,6 +2002,7 @@ async function chargerBoutiqueAdmin() {
   const snap = await getDocs(collection(db, 'articles_boutique'));
   currentArticlesBoutique = [];
   snap.forEach(d => currentArticlesBoutique.push({ id: d.id, ...d.data() }));
+  currentArticlesBoutique.sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
   renderArticlesBoutiqueAdmin();
   await chargerCommandesAdmin();
 }
@@ -2015,7 +2020,7 @@ function renderArticlesBoutiqueAdmin() {
         <div class="data-main">
           <div class="data-title">${escapeHtml(a.nom)} ${!a.actif ? '<span class="badge badge-neutral">Masqué</span>' : ''}</div>
           <div class="data-sub">${Number(a.prix).toFixed(2)} € TTC · <span class="${a.stock <= 0 ? 'badge badge-danger' : 'badge badge-ok'}">${a.stock} en stock</span></div>
-          <div class="data-sub">${a.reference ? `Réf. ${escapeHtml(a.reference)}` : ''}${a.poids ? ` · ${a.poids} ${a.poidsUnite || 'g'}` : ''}</div>
+          <div class="data-sub">${a.reference ? `Réf. ${escapeHtml(a.reference)}` : ''}${a.poids ? ` · ${formaterPoids(a.poids, a.poidsUnite)} ${a.poidsUnite || 'g'}` : ''}</div>
         </div>
       </div>
       <div class="data-actions">
@@ -2700,6 +2705,10 @@ async function chargerDogSittingAdmin() {
   currentDogSitting = [];
   snap.forEach(d => currentDogSitting.push({ id: d.id, ...d.data() }));
   currentDogSitting.sort((a, b) => (a.dateDebut || '').localeCompare(b.dateDebut || ''));
+
+  const enAttente = currentDogSitting.filter(r => r.statut === 'attente').length;
+  document.getElementById('tabDogSittingBtn')?.classList.toggle('has-unread', enAttente > 0);
+
   renderCalendrierDogSitting();
   renderListeDogSittingAdmin();
 }
@@ -2756,7 +2765,7 @@ function renderCalendrierDogSitting() {
     </div>
     <p style="font-size:0.78rem; color:var(--slate); margin-top:10px;">
       <span style="background:#DCEEE0; padding:2px 8px; border-radius:4px;">Bloqué (acompte validé)</span>
-      &nbsp; <span style="background:#FBEFDA; padding:2px 8px; border-radius:4px;">Validé, acompte en attente</span>
+      &nbsp; <span style="background:#FFE58A; padding:2px 8px; border-radius:4px;">Validé, acompte en attente</span>
       &nbsp; <span style="background:#FBEAEA; padding:2px 8px; border-radius:4px;">En attente / conflit</span>
     </p>`;
 }
@@ -2802,7 +2811,7 @@ function renderListeDogSittingAdmin() {
       if (r.acompteValide) {
         infoAcompte = `<div class="data-sub"><span class="badge badge-ok">✅ Acompte validé — date bloquée</span></div>`;
       } else {
-        infoAcompte = `<div class="data-sub">Acompte attendu : <strong>${r.acompte.toFixed(2)} €</strong> (30% de ${r.total.toFixed(2)} €) ${r.acomptePaye ? '<span class="badge badge-warn">Membre indique avoir payé</span>' : '<span class="badge badge-neutral">Pas encore signalé</span>'}</div>`;
+        infoAcompte = `<div class="data-sub">Acompte attendu : <strong>${r.acompte.toFixed(2)} €</strong> (30% de ${r.total.toFixed(2)} €) ${r.acomptePaye ? '<span class="badge badge-warn">Membre indique avoir payé</span>' : '<span class="badge badge-neutral">Le membre n\'a pas encore signalé avoir payé l\'acompte</span>'}</div>`;
       }
     }
 
@@ -2845,15 +2854,15 @@ function renderListeDogSittingAdmin() {
 }
 
 window.validerDogSitting = async (id) => {
-  await updateDoc(doc(db, 'dogsitting', id), { statut: 'validee' });
+  await updateDoc(doc(db, 'dogsitting', id), { statut: 'validee', vuParMembre: false });
   chargerDogSittingAdmin();
 };
 window.validerAcompteDogSitting = async (id) => {
-  await updateDoc(doc(db, 'dogsitting', id), { acompteValide: true });
+  await updateDoc(doc(db, 'dogsitting', id), { acompteValide: true, vuParMembre: false });
   chargerDogSittingAdmin();
 };
 window.refuserDogSitting = async (id) => {
-  await updateDoc(doc(db, 'dogsitting', id), { statut: 'refusee' });
+  await updateDoc(doc(db, 'dogsitting', id), { statut: 'refusee', vuParMembre: false });
   chargerDogSittingAdmin();
 };
 window.supprimerDogSitting = async (id) => {
