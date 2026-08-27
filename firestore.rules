@@ -14,7 +14,10 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys()
         .hasOnly(['nomMaitre','gsm','email','adressePostale','dateAnniversaire',
                   'chiens','assuranceRC',
-                  'cotisationRenouvellement','abonnementRenouvellement','dernierBlogVu']);
+                  'cotisationRenouvellement','abonnementRenouvellement','dernierBlogVu',
+                  'trouveVia','trouveViaDetail','conducteurNom','conducteurGsm','conducteurEmail',
+                  'reglementApprouve','reglementApprouveLe','reglementVersionApprouvee',
+                  'enqueteRenseignementsSoumise']);
     }
 
     match /membres/{uid} {
@@ -118,7 +121,7 @@ service cloud.firestore {
       // Lecture ouverte à tout membre connecté (nécessaire pour vérifier les
       // chevauchements de dates entre TOUS les membres avant réservation).
       allow read: if estConnecte();
-      allow create: if estConnecte() && request.resource.data.membreId == request.auth.uid;
+      allow create: if estAdmin() || (estConnecte() && request.resource.data.membreId == request.auth.uid);
       // Le membre peut mettre à jour SA PROPRE demande, mais seulement pour
       // signaler un paiement d'acompte ou marquer une notification comme vue
       // — tout le reste (statut, validation, acompte validé...) reste
@@ -142,6 +145,20 @@ service cloud.firestore {
     match /contenu_site/{id} {
       allow read: if true;
       allow write: if estAdmin();
+    }
+
+    match /reglement/{id} {
+      allow read: if estConnecte();
+      allow write: if estAdmin();
+    }
+
+    match /enquetes_anonymes/{id} {
+      // Volontairement anonyme : personne (même l'admin) ne peut lier une
+      // réponse à un membre précis. Création libre pour tout connecté,
+      // aucune mise à jour ni lien avec un uid ne sont autorisés.
+      allow read: if estAdmin();
+      allow create: if estConnecte();
+      allow update, delete: if false;
     }
   }
 }

@@ -30,6 +30,7 @@
     <button class="tab-btn" data-tab="profil">Mon profil</button>
     <button class="tab-btn" data-tab="chien">Mon chien</button>
     <button class="tab-btn" data-tab="services">Services</button>
+    <button class="tab-btn" data-tab="reglement" id="tabReglementBtn">Règlement</button>
     <button class="tab-btn" data-tab="blog" id="tabBlogBtn">Blog</button>
     <button class="tab-btn" data-tab="messages" id="tabMessagesBtn">Messages</button>
     <button class="tab-btn" data-tab="rdv">RDV</button>
@@ -92,6 +93,27 @@
       <div class="field"><label>Adresse postale</label><input id="mp-adresse" placeholder="rue, numéro, code postal, ville"></div>
       <div class="field"><label>Date d'anniversaire</label><input type="date" id="mp-anniversaire"></div>
 
+      <div class="form-grid">
+        <div class="field"><label>Vous nous avez trouvé via</label>
+          <select id="mp-trouveVia">
+            <option value="">—</option>
+            <option value="Vétérinaire">Vétérinaire</option>
+            <option value="Internet">Internet</option>
+            <option value="Facebook">Facebook</option>
+            <option value="Amis">Amis</option>
+            <option value="Autre">Autre</option>
+          </select>
+        </div>
+        <div class="field"><label>Précision (optionnel)</label><input id="mp-trouveViaDetail"></div>
+      </div>
+
+      <h3 style="margin-top:18px;">Conducteur du chien <span style="font-weight:400; color:var(--slate);">(si différent de vous)</span></h3>
+      <div class="form-grid">
+        <div class="field"><label>Nom Prénom</label><input id="mp-conducteurNom"></div>
+        <div class="field"><label>GSM</label><input id="mp-conducteurGsm"></div>
+      </div>
+      <div class="field"><label>E-mail</label><input type="email" id="mp-conducteurEmail"></div>
+
       <h3 style="margin-top:18px;">Assurance RC familiale</h3>
       <div class="form-grid">
         <div class="field"><label>Compagnie</label><input id="mp-rcCompagnie"></div>
@@ -121,6 +143,22 @@
     <div class="app-panel">
       <h2>Services</h2>
       <div id="zoneServices"><div class="empty-state">...</div></div>
+    </div>
+  </div>
+
+  <!-- ==================== RÈGLEMENT ==================== -->
+  <div id="panel-reglement" class="tab-panel hidden">
+    <div class="app-panel">
+      <h2>Règlement d'Ordre Intérieur</h2>
+      <div id="roi-zoneTexte" style="white-space:pre-wrap; font-size:0.92rem; line-height:1.6; max-height:420px; overflow-y:auto; border:1px solid #E3E7EB; border-radius:8px; padding:16px; background:var(--paper);"></div>
+
+      <div id="roi-zoneApprobation" style="margin-top:16px;"></div>
+    </div>
+
+    <div class="app-panel" id="enqueteWrap">
+      <h2>Fiche de renseignements <span style="font-weight:400; color:var(--slate); font-size:0.85rem;">(anonyme)</span></h2>
+      <p style="color:var(--slate); font-size:0.85rem; margin-bottom:14px;">Ce petit questionnaire nous aide à mieux connaître nos membres. Il est totalement anonyme — vos réponses ne sont liées ni à votre nom, ni à votre compte.</p>
+      <div id="enquete-form"></div>
     </div>
   </div>
 

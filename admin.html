@@ -168,7 +168,10 @@
 
   <div id="panel-dogsitting" class="tab-panel hidden">
     <div class="app-panel">
-      <h2>Calendrier</h2>
+      <div class="section-heading">
+        <h2>Calendrier</h2>
+        <button class="btn-sm danger" id="btnBloquerPeriode">🚫 Bloquer une période</button>
+      </div>
       <div id="dsCalendrier"></div>
     </div>
     <div class="app-panel">
@@ -208,6 +211,30 @@
       <h2>Modifier les textes du site</h2>
       <p style="color:var(--slate); font-size:0.85rem; margin-bottom:14px;">Modifie ici les textes affichés sur les pages publiques du site (Accueil, Le Club, Activités, Katia). Un champ laissé tel quel garde son texte d'origine. La mise à jour est visible sur le site en quelques secondes après enregistrement.</p>
       <div id="zoneContenu"><div class="empty-state">...</div></div>
+    </div>
+
+    <div class="app-panel">
+      <h2>Règlement d'Ordre Intérieur (ROI)</h2>
+      <p style="color:var(--slate); font-size:0.85rem; margin-bottom:14px;">
+        Ce texte est celui que chaque membre doit lire et approuver depuis son espace. Version actuelle : <strong id="roi-versionActuelle">—</strong>.<br>
+        <strong>Enregistrer</strong> = corrige une coquille sans redemander l'accord aux membres.<br>
+        <strong>Publier une nouvelle version</strong> = pour un vrai changement de règlement — tous les membres devront réapprouver.
+      </p>
+      <textarea id="roi-texte" rows="16" style="width:100%; box-sizing:border-box; resize:vertical; font-family:inherit;"></textarea>
+      <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+        <button class="btn-sm" id="btnSauverRoiSansVersion">Enregistrer (sans nouvelle version)</button>
+        <button class="btn-sm primary" id="btnPublierNouvelleVersionRoi">Publier une nouvelle version</button>
+      </div>
+      <p id="roi-statut" style="font-size:0.85rem; color:var(--slate); margin-top:8px;"></p>
+
+      <h3 style="margin-top:22px;">Membres n'ayant pas encore approuvé la version actuelle</h3>
+      <div class="data-list" id="listeRoiNonApprouve"><div class="empty-state">...</div></div>
+    </div>
+
+    <div class="app-panel">
+      <h2>Fiche de renseignements — réponses anonymes</h2>
+      <p style="color:var(--slate); font-size:0.85rem; margin-bottom:14px;">Ces réponses sont volontairement anonymes — impossible de savoir quel membre a répondu quoi.</p>
+      <div class="data-list" id="listeEnquetesAnonymes"><div class="empty-state">...</div></div>
     </div>
   </div>
 
