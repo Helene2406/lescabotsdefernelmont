@@ -16,7 +16,7 @@ function dateISOLocale(d) {
   return `${y}-${m}-${j}`;
 }
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
-const VERSION_SITE = 'V54';
+const VERSION_SITE = 'V55';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 
 const ENTREPRISE_IBAN = 'BE58 7320 5129 6479';
@@ -1531,7 +1531,26 @@ function chargerEnqueteAnonyme() {
     return;
   }
 
+  const chiensActifs = (membreData.chiens || []).filter(c => !c.archive);
+
   wrap.innerHTML = `
+    <div class="banner-alert" style="margin-bottom:14px;">
+      Par défaut, votre identifiant et le nom de votre chien sont joints à vos réponses (utile pour Katia). Vous pouvez cocher la case ci-dessous pour les retirer et répondre anonymement.
+    </div>
+    <label class="membre-check-row" style="margin-bottom:14px;">
+      <input type="checkbox" id="eq-anonymiser">
+      <span>Je préfère répondre anonymement (retire mon identifiant et le nom de mon chien)</span>
+    </label>
+
+    <div class="form-grid" id="eq-identiteWrap">
+      <div class="field"><label>Identifiant</label><input id="eq-identifiant" value="${escapeHtml(membreData.identifiant || '')}" disabled></div>
+      <div class="field"><label>Chien concerné</label>
+        <select id="eq-chienNom">
+          ${chiensActifs.map(c => `<option value="${escapeHtml(c.nom)}">${escapeHtml(c.nom)}</option>`).join('') || '<option value="">—</option>'}
+        </select>
+      </div>
+    </div>
+
     <div class="field"><label>Tranche d'âge du maître</label>
       <select id="eq-age">
         <option value="20-30 ans">20-30 ans</option>
@@ -1568,14 +1587,21 @@ function chargerEnqueteAnonyme() {
     <div class="field"><label>Quelles sont les raisons qui vous ont mené à ce choix de race ?</label><textarea id="eq-raisonsChoix" rows="2" style="width:100%; box-sizing:border-box; resize:vertical;"></textarea></div>
     <div class="field"><label>Comment se sont passées les premières semaines à la maison ?</label><textarea id="eq-premieresSemaines" rows="3" style="width:100%; box-sizing:border-box; resize:vertical;"></textarea></div>
 
-    <button class="btn-sm primary" id="eq-envoyer" style="margin-top:10px;">Envoyer mes réponses (anonymement)</button>
+    <button class="btn-sm primary" id="eq-envoyer" style="margin-top:10px;">Envoyer mes réponses</button>
     <p id="eq-statut" style="font-size:0.85rem; color:var(--slate); margin-top:8px;"></p>`;
+
+  document.getElementById('eq-anonymiser').addEventListener('change', (e) => {
+    document.getElementById('eq-identiteWrap').classList.toggle('hidden', e.target.checked);
+  });
 
   document.getElementById('eq-envoyer').addEventListener('click', async () => {
     const statutEl = document.getElementById('eq-statut');
     statutEl.textContent = 'Envoi en cours...';
+    const anonymiser = document.getElementById('eq-anonymiser').checked;
     try {
-      await addDoc(collection(db, 'enquetes_anonymes'), {
+      await addDoc(collection(db, 'enquetes_renseignements'), {
+        identifiant: anonymiser ? null : (membreData.identifiant || null),
+        chienNom: anonymiser ? null : (document.getElementById('eq-chienNom').value || null),
         age: document.getElementById('eq-age').value,
         race: document.getElementById('eq-race').value.trim(),
         sexe: document.getElementById('eq-sexe').value,
@@ -1592,7 +1618,6 @@ function chargerEnqueteAnonyme() {
         raisonsChoix: document.getElementById('eq-raisonsChoix').value.trim(),
         premieresSemaines: document.getElementById('eq-premieresSemaines').value.trim(),
         dateEnvoi: serverTimestamp()
-        // Volontairement : aucun membreId, aucun uid, aucune donnée d'identité.
       });
       await updateDoc(doc(db, 'membres', membreUid), { enqueteRenseignementsSoumise: true });
       membreData.enqueteRenseignementsSoumise = true;

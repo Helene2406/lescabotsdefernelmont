@@ -597,6 +597,8 @@ blockquote.pull-quote {
   font-size: 0.82rem;
   color: #8A97A2;
 }
+.footer-bottom a { color: #8A97A2; text-decoration: underline; }
+.footer-bottom a:hover { color: #FFFFFF; }
 
 /* ---------- Utility ---------- */
 
