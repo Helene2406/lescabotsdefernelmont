@@ -5,7 +5,9 @@ import {
   serverTimestamp, identifiantVersEmail
 } from "./firebase-config.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
-import { getAuth as getAuthSecondary, createUserWithEmailAndPassword, signOut as signOutSecondary }
+import { getAuth as getAuthSecondary, createUserWithEmailAndPassword, signOut as signOutSecondary,
+  signInWithEmailAndPassword as signInSecondary, updatePassword as updatePasswordSecondary,
+  updatePassword, reauthenticateWithCredential, EmailAuthProvider }
   from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import { meteoActuelle, meteoPour, alerteMeteo, iconeCode } from "./meteo.js";
 
@@ -20,7 +22,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V56';
+const VERSION_SITE = 'V57';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
@@ -503,7 +505,8 @@ function ouvrirModalMembre(membre) {
         <div class="form-grid">
           <div class="field"><label>Identifiant</label><input value="${escapeAttr(membre.identifiant||'')}" disabled style="background:var(--paper-warm);"></div>
           <div class="field"><label>Mot de passe (pour référence)</label><input id="mm-mdpRef" value="${escapeAttr(membre.motDePasseInitial||'')}" placeholder="renseigne-le si tu le connais"></div>
-        </div>`}
+        </div>
+        <button class="btn-sm" type="button" id="mm-btnChangerMdp" style="margin-bottom:10px;">🔑 Changer réellement le mot de passe de connexion</button>`}
 
         <h3 style="margin-top:18px;">Coordonnées</h3>
         <div class="field"><label>Nom du maître</label><input id="mm-nomMaitre" value="${isEdit ? escapeAttr(membre.nomMaitre) : ''}"></div>
@@ -599,6 +602,9 @@ function ouvrirModalMembre(membre) {
   remplirSelectGroupes();
   if (isEdit && membre.groupeId) document.getElementById('mm-groupe').value = membre.groupeId;
   if (isEdit) { chargerHistoriquePaiements(membre.id); chargerHistoriquePresencesAdmin(membre.id); }
+  if (isEdit) {
+    document.getElementById('mm-btnChangerMdp')?.addEventListener('click', () => window.changerMotDePasseMembre(membre.id, membre.identifiant, membre.motDePasseInitial));
+  }
 
   document.getElementById('mm-save').addEventListener('click', async () => {
     const btnSave = document.getElementById('mm-save');
@@ -3376,3 +3382,96 @@ async function chargerEnquetesAnonymesAdmin() {
       </div>
     </div>`).join('');
 }
+
+// ==========================================================================
+// GESTION DES MOTS DE PASSE
+// ==========================================================================
+
+// Admin change SON PROPRE mot de passe (nécessite de retaper l'actuel).
+document.getElementById('btnMonCompte').addEventListener('click', () => {
+  const html = `
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-box">
+        <h3>🔑 Mon compte — changer mon mot de passe</h3>
+        <div class="field"><label>Mot de passe actuel</label><input type="password" id="cpt-mdpActuel"></div>
+        <div class="field"><label>Nouveau mot de passe (min. 6 caractères)</label><input type="password" id="cpt-mdpNouveau"></div>
+        <div class="field"><label>Confirmer le nouveau mot de passe</label><input type="password" id="cpt-mdpConfirme"></div>
+        <div class="modal-actions">
+          <button class="btn-sm" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" id="cpt-mdp-save">Changer mon mot de passe</button>
+        </div>
+        <p id="cpt-mdp-statut" style="font-size:0.85rem; color:var(--slate); margin-top:8px;"></p>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+
+  document.getElementById('cpt-mdp-save').addEventListener('click', async () => {
+    const statutEl = document.getElementById('cpt-mdp-statut');
+    const actuel = document.getElementById('cpt-mdpActuel').value;
+    const nouveau = document.getElementById('cpt-mdpNouveau').value;
+    const confirme = document.getElementById('cpt-mdpConfirme').value;
+
+    if (!actuel || !nouveau) { statutEl.textContent = 'Merci de remplir tous les champs.'; return; }
+    if (nouveau.length < 6) { statutEl.textContent = 'Le nouveau mot de passe doit faire au moins 6 caractères.'; return; }
+    if (nouveau !== confirme) { statutEl.textContent = 'La confirmation ne correspond pas.'; return; }
+
+    statutEl.textContent = 'Changement en cours...';
+    try {
+      const credential = EmailAuthProvider.credential(auth.currentUser.email, actuel);
+      await reauthenticateWithCredential(auth.currentUser, credential);
+      await updatePassword(auth.currentUser, nouveau);
+      statutEl.textContent = 'Mot de passe changé avec succès ✓';
+      setTimeout(() => window.fermerModal(), 1500);
+    } catch (err) {
+      statutEl.textContent = err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential'
+        ? 'Mot de passe actuel incorrect.'
+        : 'Erreur : ' + err.message;
+    }
+  });
+});
+
+// Admin change le mot de passe RÉEL d'un membre (pas juste le champ
+// "référence") — utilise une session Firebase secondaire pour se connecter
+// au compte du membre (avec son mot de passe actuel connu) sans déconnecter
+// la session admin en cours.
+window.changerMotDePasseMembre = (membreId, identifiant, motDePasseActuel) => {
+  const html = `
+    <div class="modal-overlay" id="modalOverlayMdpMembre">
+      <div class="modal-box">
+        <h3>Changer le mot de passe de ${escapeHtml(identifiant || 'ce membre')}</h3>
+        ${!motDePasseActuel ? '<p style="color:#8A2E2E; font-size:0.85rem;">⚠️ Le mot de passe actuel de ce membre n\'est pas connu du système (champ vide) — le changement ne pourra pas fonctionner tant qu\'il n\'est pas renseigné dans le champ "Mot de passe (pour référence)" juste au-dessus, avec la vraie valeur actuelle.</p>' : ''}
+        <div class="field"><label>Nouveau mot de passe (min. 6 caractères)</label><input type="password" id="mdpm-nouveau"></div>
+        <div class="modal-actions">
+          <button class="btn-sm" onclick="document.getElementById('modalOverlayMdpMembre').remove()">Annuler</button>
+          <button class="btn-sm primary" id="mdpm-save" ${!motDePasseActuel ? 'disabled' : ''}>Changer le mot de passe</button>
+        </div>
+        <p id="mdpm-statut" style="font-size:0.85rem; color:var(--slate); margin-top:8px;"></p>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+
+  document.getElementById('mdpm-save').addEventListener('click', async () => {
+    const statutEl = document.getElementById('mdpm-statut');
+    const nouveau = document.getElementById('mdpm-nouveau').value;
+    if (!nouveau || nouveau.length < 6) { statutEl.textContent = 'Le nouveau mot de passe doit faire au moins 6 caractères.'; return; }
+
+    statutEl.textContent = 'Changement en cours...';
+    const email = identifiantVersEmail(identifiant);
+    const secondaryApp = initializeApp(auth.app.options, 'mdp-membre-' + Date.now());
+    const secondaryAuth = getAuthSecondary(secondaryApp);
+    try {
+      await signInSecondary(secondaryAuth, email, motDePasseActuel);
+      await updatePasswordSecondary(secondaryAuth.currentUser, nouveau);
+      await signOutSecondary(secondaryAuth);
+      await updateDoc(doc(db, 'membres', membreId), { motDePasseInitial: nouveau });
+      statutEl.textContent = 'Mot de passe changé avec succès ✓';
+      setTimeout(() => {
+        document.getElementById('modalOverlayMdpMembre')?.remove();
+        window.fermerModal();
+        chargerMembres();
+      }, 1200);
+    } catch (err) {
+      statutEl.textContent = 'Erreur : le mot de passe actuel enregistré ne correspond plus au vrai mot de passe du compte (' + (err.code || err.message) + '). Recontacte le membre pour connaître son mot de passe actuel, mets-le à jour dans le champ "référence", puis réessaie.';
+    }
+  });
+};
