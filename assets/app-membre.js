@@ -16,7 +16,7 @@ function dateISOLocale(d) {
   return `${y}-${m}-${j}`;
 }
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
-const VERSION_SITE = 'V51';
+const VERSION_SITE = 'V54';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 
 const ENTREPRISE_IBAN = 'BE58 7320 5129 6479';
@@ -69,6 +69,8 @@ onAuthStateChanged(auth, async (user) => {
   chargerVideosMembre();
   chargerBlogMembre();
   chargerHistoriquePresencesMembre();
+  chargerRoiMembre();
+  chargerEnqueteAnonyme();
   initNotifications();
 });
 
@@ -587,6 +589,11 @@ function preremplirMonProfil() {
   document.getElementById('mp-email').value = membreData.email || '';
   document.getElementById('mp-adresse').value = membreData.adressePostale || '';
   document.getElementById('mp-anniversaire').value = membreData.dateAnniversaire || '';
+  document.getElementById('mp-trouveVia').value = membreData.trouveVia || '';
+  document.getElementById('mp-trouveViaDetail').value = membreData.trouveViaDetail || '';
+  document.getElementById('mp-conducteurNom').value = membreData.conducteurNom || '';
+  document.getElementById('mp-conducteurGsm').value = membreData.conducteurGsm || '';
+  document.getElementById('mp-conducteurEmail').value = membreData.conducteurEmail || '';
 
   document.getElementById('mp-rcCompagnie').value = rc.compagnie || '';
   document.getElementById('mp-rcNumero').value = rc.numeroPolice || '';
@@ -604,6 +611,11 @@ document.getElementById('mp-enregistrer').addEventListener('click', async () => 
     email: document.getElementById('mp-email').value.trim(),
     adressePostale: document.getElementById('mp-adresse').value.trim(),
     dateAnniversaire: document.getElementById('mp-anniversaire').value,
+    trouveVia: document.getElementById('mp-trouveVia').value,
+    trouveViaDetail: document.getElementById('mp-trouveViaDetail').value.trim(),
+    conducteurNom: document.getElementById('mp-conducteurNom').value.trim(),
+    conducteurGsm: document.getElementById('mp-conducteurGsm').value.trim(),
+    conducteurEmail: document.getElementById('mp-conducteurEmail').value.trim(),
     assuranceRC: {
       compagnie: document.getElementById('mp-rcCompagnie').value.trim(),
       numeroPolice: document.getElementById('mp-rcNumero').value.trim(),
@@ -694,6 +706,19 @@ window.ouvrirFormChien = (chienId) => {
           </div>
         </div>
 
+        <div class="form-grid">
+          <div class="field"><label>Origine</label>
+            <select id="fc-origine">
+              <option value="" ${!chien?.origine ? 'selected':''}>—</option>
+              <option value="Elevage familial" ${chien?.origine==='Elevage familial' ? 'selected':''}>Élevage familial</option>
+              <option value="Petshop" ${chien?.origine==='Petshop' ? 'selected':''}>Petshop</option>
+              <option value="Refuge" ${chien?.origine==='Refuge' ? 'selected':''}>Refuge</option>
+              <option value="Autre" ${chien?.origine==='Autre' ? 'selected':''}>Autre</option>
+            </select>
+          </div>
+          <div class="field"><label>Nom et lieu de l'origine</label><input id="fc-origineDetail" value="${chien ? escapeHtml(chien.origineDetail||'') : ''}" placeholder="ex: Élevage du Bois Joli, Andenne"></div>
+        </div>
+
         <h3 style="margin-top:16px;">Vaccins</h3>
         <div class="form-grid">
           <div class="field"><label>Leptospirose — marque</label><select id="fc-vaxLepto-marque">${optionsMarqueVaccinMembre(v.leptospirose?.marque)}</select></div>
@@ -725,6 +750,8 @@ window.ouvrirFormChien = (chienId) => {
       puce: document.getElementById('fc-puce').value.trim(),
       passeport: document.getElementById('fc-passeport').value.trim(),
       pedigree: document.getElementById('fc-pedigree').value === 'oui',
+      origine: document.getElementById('fc-origine').value,
+      origineDetail: document.getElementById('fc-origineDetail').value.trim(),
       archive: false,
       vaccins: {
         leptospirose: { marque: document.getElementById('fc-vaxLepto-marque').value, date: document.getElementById('fc-vaxLepto-date').value },
@@ -1078,10 +1105,13 @@ async function chargerMesDemandesDogSitting() {
   wrap.innerHTML = demandes.map(r => {
     const badge = r.statut === 'validee' ? '<span class="badge badge-ok">Validée</span>'
       : r.statut === 'refusee' ? '<span class="badge badge-danger">Refusée</span>'
+      : r.statut === 'annulee' ? '<span class="badge badge-danger">Annulée par Katia</span>'
       : '<span class="badge badge-warn">En attente de validation (dates déjà réservées)</span>';
 
     let blocAcompte = '';
-    if (r.statut === 'validee' && r.acompte) {
+    if (r.statut === 'annulee' && r.motifAnnulation) {
+      blocAcompte = `<div class="banner-alert" style="margin-top:8px;">Motif : ${escapeHtml(r.motifAnnulation)}</div>`;
+    } else if (r.statut === 'validee' && r.acompte) {
       const communication = `Dog Sitting ${r.chienNom} ${r.dateDebut}`;
       if (r.acompteValide) {
         blocAcompte = `<div style="margin-top:8px;"><span class="badge badge-ok">✅ Date bloquée — acompte reçu et validé</span></div>`;
@@ -1163,7 +1193,7 @@ document.getElementById('ds-envoyer').addEventListener('click', async () => {
       membreId: membreUid, chienNom, dateDebut, dateFin, heureArrivee, heureDepart,
       apporte, servicesDemandes, habitudesDeVie,
       statut: chevauchement ? 'attente' : 'validee',
-      total, acompte, acomptePaye: false, acompteValide: false, vuParMembre: true,
+      total, acompte, acomptePaye: false, acompteValide: false, vuParMembre: true, vuParAdmin: false,
       dateCreation: serverTimestamp()
     });
 
@@ -1446,3 +1476,129 @@ window.marquerDogSittingVu = async () => {
   ));
   document.getElementById('tabDogSittingBtn')?.classList.remove('has-unread');
 };
+
+// ==========================================================================
+// RÈGLEMENT D'ORDRE INTÉRIEUR (ROI) — lecture + approbation obligatoire.
+// ==========================================================================
+async function chargerRoiMembre() {
+  const snap = await getDoc(doc(db, 'reglement', 'roi'));
+  const version = snap.exists() ? snap.data().version : 1;
+  const texte = snap.exists() ? snap.data().texte : '';
+
+  document.getElementById('roi-zoneTexte').textContent = texte || 'Le règlement sera bientôt disponible ici.';
+
+  const dejaApprouve = (membreData.reglementVersionApprouvee || 0) >= version;
+  document.getElementById('tabReglementBtn')?.classList.toggle('has-unread', !dejaApprouve);
+
+  const zoneApprobation = document.getElementById('roi-zoneApprobation');
+  if (dejaApprouve) {
+    const dateLabel = membreData.reglementApprouveLe ? new Date(membreData.reglementApprouveLe + 'T00:00:00').toLocaleDateString('fr-BE') : '';
+    zoneApprobation.innerHTML = `<span class="badge badge-ok">✅ Vous avez approuvé ce règlement (version ${version})${dateLabel ? ' le ' + dateLabel : ''}</span>`;
+  } else {
+    zoneApprobation.innerHTML = `
+      <label class="membre-check-row">
+        <input type="checkbox" id="roi-checkbox">
+        <span>Je déclare avoir lu et j'approuve le Règlement d'Ordre Intérieur ci-dessus.</span>
+      </label>
+      <button class="btn-sm primary" id="roi-valider" style="margin-top:10px;">Valider mon approbation</button>
+      <p id="roi-statutMembre" style="font-size:0.85rem; color:var(--slate); margin-top:6px;"></p>`;
+
+    document.getElementById('roi-valider').addEventListener('click', async () => {
+      const statutEl = document.getElementById('roi-statutMembre');
+      if (!document.getElementById('roi-checkbox').checked) { statutEl.textContent = 'Merci de cocher la case avant de valider.'; return; }
+      const aujourdhui = dateISOLocale(new Date());
+      await updateDoc(doc(db, 'membres', membreUid), {
+        reglementApprouve: true, reglementApprouveLe: aujourdhui, reglementVersionApprouvee: version
+      });
+      membreData.reglementApprouve = true;
+      membreData.reglementApprouveLe = aujourdhui;
+      membreData.reglementVersionApprouvee = version;
+      chargerRoiMembre();
+    });
+  }
+}
+
+// ==========================================================================
+// FICHE DE RENSEIGNEMENTS — questionnaire anonyme (aucun lien avec le
+// compte du membre dans les réponses elles-mêmes).
+// ==========================================================================
+function chargerEnqueteAnonyme() {
+  const wrap = document.getElementById('enquete-form');
+  if (!wrap) return;
+
+  if (membreData.enqueteRenseignementsSoumise) {
+    wrap.innerHTML = '<div class="empty-state">Merci, vous avez déjà répondu à ce questionnaire. 🙏</div>';
+    return;
+  }
+
+  wrap.innerHTML = `
+    <div class="field"><label>Tranche d'âge du maître</label>
+      <select id="eq-age">
+        <option value="20-30 ans">20-30 ans</option>
+        <option value="30-40 ans">30-40 ans</option>
+        <option value="40-50 ans">40-50 ans</option>
+        <option value="50-60 ans">50-60 ans</option>
+        <option value="60 ans et plus">60 ans et plus</option>
+      </select>
+    </div>
+    <div class="form-grid">
+      <div class="field"><label>Race du chien</label><input id="eq-race"></div>
+      <div class="field"><label>Sexe</label>
+        <select id="eq-sexe"><option value="Mâle">Mâle</option><option value="Femelle">Femelle</option></select>
+      </div>
+    </div>
+    <div class="field"><label>Élevage (nom, si connu)</label><input id="eq-elevage"></div>
+    <div class="field"><label>Âge du retrait du chiot (en semaines)</label><input type="number" id="eq-ageRetrait"></div>
+    <div class="form-grid">
+      <div class="field"><label>Avez-vous pu voir le chiot régulièrement chez l'éleveur ?</label>
+        <select id="eq-vuRegulierement"><option value="Oui">Oui</option><option value="Non">Non</option></select>
+      </div>
+      <div class="field"><label>L'avez-vous choisi vous-même ?</label>
+        <select id="eq-choisiSoiMeme"><option value="Oui">Oui, moi-même</option><option value="Non">Non, imposé par l'éleveur</option></select>
+      </div>
+    </div>
+    <div class="field"><label>Si choisi vous-même, sur quels critères ?</label><input id="eq-criteres"></div>
+    <div class="field"><label>Est-ce votre premier chien ?</label>
+      <select id="eq-premierChien"><option value="Oui">Oui</option><option value="Non">Non</option></select>
+    </div>
+    <div class="field"><label>Avez-vous cherché longtemps pour trouver cette race/cet élevage ?</label><input id="eq-recherche"></div>
+    <div class="field"><label>Pourquoi un mâle ? Pourquoi une femelle ?</label><input id="eq-pourquoiSexe"></div>
+    <div class="field"><label>Avez-vous des enfants ? Si oui, combien et de quel âge ?</label><input id="eq-enfants"></div>
+    <div class="field"><label>Connaissez-vous bien cette race ?</label><input id="eq-connaissanceRace"></div>
+    <div class="field"><label>Quelles sont les raisons qui vous ont mené à ce choix de race ?</label><textarea id="eq-raisonsChoix" rows="2" style="width:100%; box-sizing:border-box; resize:vertical;"></textarea></div>
+    <div class="field"><label>Comment se sont passées les premières semaines à la maison ?</label><textarea id="eq-premieresSemaines" rows="3" style="width:100%; box-sizing:border-box; resize:vertical;"></textarea></div>
+
+    <button class="btn-sm primary" id="eq-envoyer" style="margin-top:10px;">Envoyer mes réponses (anonymement)</button>
+    <p id="eq-statut" style="font-size:0.85rem; color:var(--slate); margin-top:8px;"></p>`;
+
+  document.getElementById('eq-envoyer').addEventListener('click', async () => {
+    const statutEl = document.getElementById('eq-statut');
+    statutEl.textContent = 'Envoi en cours...';
+    try {
+      await addDoc(collection(db, 'enquetes_anonymes'), {
+        age: document.getElementById('eq-age').value,
+        race: document.getElementById('eq-race').value.trim(),
+        sexe: document.getElementById('eq-sexe').value,
+        elevage: document.getElementById('eq-elevage').value.trim(),
+        ageRetrait: document.getElementById('eq-ageRetrait').value,
+        vuRegulierement: document.getElementById('eq-vuRegulierement').value,
+        choisiSoiMeme: document.getElementById('eq-choisiSoiMeme').value,
+        criteres: document.getElementById('eq-criteres').value.trim(),
+        premierChien: document.getElementById('eq-premierChien').value,
+        recherche: document.getElementById('eq-recherche').value.trim(),
+        pourquoiSexe: document.getElementById('eq-pourquoiSexe').value.trim(),
+        enfants: document.getElementById('eq-enfants').value.trim(),
+        connaissanceRace: document.getElementById('eq-connaissanceRace').value.trim(),
+        raisonsChoix: document.getElementById('eq-raisonsChoix').value.trim(),
+        premieresSemaines: document.getElementById('eq-premieresSemaines').value.trim(),
+        dateEnvoi: serverTimestamp()
+        // Volontairement : aucun membreId, aucun uid, aucune donnée d'identité.
+      });
+      await updateDoc(doc(db, 'membres', membreUid), { enqueteRenseignementsSoumise: true });
+      membreData.enqueteRenseignementsSoumise = true;
+      chargerEnqueteAnonyme();
+    } catch (err) {
+      statutEl.textContent = 'Erreur : ' + (err.message || err);
+    }
+  });
+}

@@ -20,7 +20,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V51';
+const VERSION_SITE = 'V54';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
@@ -69,6 +69,8 @@ onAuthStateChanged(auth, async (user) => {
   chargerComptaAdmin();
   chargerNumerotationCompta();
   chargerContenuAdmin();
+  chargerRoiAdmin();
+  chargerEnquetesAnonymesAdmin();
   console.log('%c🍓 Un petit jardin secret pour toi, Katia...', 'color:#C0392B; font-size:13px;');
 });
 
@@ -81,6 +83,9 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
     btn.classList.add('active');
     document.getElementById('panel-' + btn.dataset.tab).classList.remove('hidden');
+    if (btn.dataset.tab === 'dogsitting' && window.marquerDogSittingVuAdmin) {
+      window.marquerDogSittingVuAdmin();
+    }
   });
 });
 
@@ -509,6 +514,27 @@ function ouvrirModalMembre(membre) {
         <div class="field"><label>Adresse postale</label><input id="mm-adresse" value="${isEdit ? escapeAttr(membre.adressePostale||'') : ''}" placeholder="rue, numéro, code postal, ville"></div>
         <div class="field"><label>Date d'anniversaire</label><input type="date" id="mm-anniversaire" value="${isEdit ? (membre.dateAnniversaire||'') : ''}"></div>
 
+        <div class="form-grid">
+          <div class="field"><label>Vous nous avez trouvé via</label>
+            <select id="mm-trouveVia">
+              <option value="" ${!membre?.trouveVia ? 'selected':''}>—</option>
+              <option value="Vétérinaire" ${membre?.trouveVia==='Vétérinaire' ? 'selected':''}>Vétérinaire</option>
+              <option value="Internet" ${membre?.trouveVia==='Internet' ? 'selected':''}>Internet</option>
+              <option value="Facebook" ${membre?.trouveVia==='Facebook' ? 'selected':''}>Facebook</option>
+              <option value="Amis" ${membre?.trouveVia==='Amis' ? 'selected':''}>Amis</option>
+              <option value="Autre" ${membre?.trouveVia==='Autre' ? 'selected':''}>Autre</option>
+            </select>
+          </div>
+          <div class="field"><label>Précision</label><input id="mm-trouveViaDetail" value="${isEdit ? escapeAttr(membre.trouveViaDetail||'') : ''}"></div>
+        </div>
+
+        <h3 style="margin-top:18px;">Conducteur du chien (si différent du propriétaire)</h3>
+        <div class="form-grid">
+          <div class="field"><label>Nom Prénom</label><input id="mm-conducteurNom" value="${isEdit ? escapeAttr(membre.conducteurNom||'') : ''}"></div>
+          <div class="field"><label>GSM</label><input id="mm-conducteurGsm" value="${isEdit ? escapeAttr(membre.conducteurGsm||'') : ''}"></div>
+        </div>
+        <div class="field"><label>E-mail</label><input type="email" id="mm-conducteurEmail" value="${isEdit ? escapeAttr(membre.conducteurEmail||'') : ''}"></div>
+
         <h3 style="margin-top:18px;">Assurance RC familiale</h3>
         <div class="form-grid">
           <div class="field"><label>Compagnie</label><input id="mm-rcCompagnie" value="${escapeAttr(rc.compagnie||'')}"></div>
@@ -585,6 +611,11 @@ function ouvrirModalMembre(membre) {
       email: document.getElementById('mm-email').value.trim(),
       adressePostale: document.getElementById('mm-adresse').value.trim(),
       dateAnniversaire: document.getElementById('mm-anniversaire').value,
+      trouveVia: document.getElementById('mm-trouveVia').value,
+      trouveViaDetail: document.getElementById('mm-trouveViaDetail').value.trim(),
+      conducteurNom: document.getElementById('mm-conducteurNom').value.trim(),
+      conducteurGsm: document.getElementById('mm-conducteurGsm').value.trim(),
+      conducteurEmail: document.getElementById('mm-conducteurEmail').value.trim(),
       assuranceRC: {
         compagnie: document.getElementById('mm-rcCompagnie').value.trim(),
         numeroPolice: document.getElementById('mm-rcNumero').value.trim(),
@@ -701,6 +732,19 @@ window.ouvrirModalChien = (membreId, chienId) => {
           </div>
         </div>
 
+        <div class="form-grid">
+          <div class="field"><label>Origine</label>
+            <select id="mc-origine">
+              <option value="" ${!chien?.origine ? 'selected':''}>—</option>
+              <option value="Elevage familial" ${chien?.origine==='Elevage familial' ? 'selected':''}>Élevage familial</option>
+              <option value="Petshop" ${chien?.origine==='Petshop' ? 'selected':''}>Petshop</option>
+              <option value="Refuge" ${chien?.origine==='Refuge' ? 'selected':''}>Refuge</option>
+              <option value="Autre" ${chien?.origine==='Autre' ? 'selected':''}>Autre</option>
+            </select>
+          </div>
+          <div class="field"><label>Nom et lieu de l'origine</label><input id="mc-origineDetail" value="${chien ? escapeAttr(chien.origineDetail||'') : ''}" placeholder="ex: Élevage du Bois Joli, Andenne"></div>
+        </div>
+
         <h3 style="margin-top:16px;">Vaccins</h3>
         <div class="form-grid">
           <div class="field"><label>Leptospirose — marque</label><select id="mc-vaxLepto-marque">${optionsMarqueVaccin(v.leptospirose?.marque)}</select></div>
@@ -732,6 +776,8 @@ window.ouvrirModalChien = (membreId, chienId) => {
       puce: document.getElementById('mc-puce').value.trim(),
       passeport: document.getElementById('mc-passeport').value.trim(),
       pedigree: document.getElementById('mc-pedigree').value === 'oui',
+      origine: document.getElementById('mc-origine').value,
+      origineDetail: document.getElementById('mc-origineDetail').value.trim(),
       archive: false,
       vaccins: {
         leptospirose: { marque: document.getElementById('mc-vaxLepto-marque').value, date: document.getElementById('mc-vaxLepto-date').value },
@@ -2706,26 +2752,27 @@ async function chargerDogSittingAdmin() {
   snap.forEach(d => currentDogSitting.push({ id: d.id, ...d.data() }));
   currentDogSitting.sort((a, b) => (a.dateDebut || '').localeCompare(b.dateDebut || ''));
 
-  const enAttente = currentDogSitting.filter(r => r.statut === 'attente').length;
-  document.getElementById('tabDogSittingBtn')?.classList.toggle('has-unread', enAttente > 0);
+  const nonVues = currentDogSitting.filter(r => r.vuParAdmin === false).length;
+  document.getElementById('tabDogSittingBtn')?.classList.toggle('has-unread', nonVues > 0);
 
   renderCalendrierDogSitting();
   renderListeDogSittingAdmin();
 }
 
 function joursOccupesDansLeMois(annee, mois) {
-  // Renvoie une map jour(1-31) -> 'bloque' (acompte validé) | 'validee' (approuvé, acompte pas encore validé) | 'attente'
-  // Priorité d'affichage : attente > validee > bloque (pour ne jamais masquer un conflit).
+  // Renvoie une map jour(1-31) -> 'indispo' (blocage admin) | 'bloque' (acompte validé) |
+  // 'validee' (approuvé, acompte pas encore validé) | 'attente'
+  // Priorité d'affichage : attente > indispo > validee > bloque (pour ne jamais masquer un conflit).
   const map = {};
   currentDogSitting.forEach(r => {
-    if (r.statut === 'refusee') return;
-    const statutCase = r.statut === 'attente' ? 'attente' : (r.acompteValide ? 'bloque' : 'validee');
+    if (r.statut === 'refusee' || r.statut === 'annulee') return;
+    const statutCase = r.isBlocage ? 'indispo' : r.statut === 'attente' ? 'attente' : (r.acompteValide ? 'bloque' : 'validee');
     const debut = new Date(r.dateDebut + 'T00:00:00');
     const fin = new Date(r.dateFin + 'T00:00:00');
     for (let d = new Date(debut); d <= fin; d.setDate(d.getDate() + 1)) {
       if (d.getFullYear() === annee && d.getMonth() === mois) {
         const j = d.getDate();
-        const ordre = { attente: 2, validee: 1, bloque: 0 };
+        const ordre = { attente: 3, indispo: 2, validee: 1, bloque: 0 };
         if (!map[j] || ordre[statutCase] > ordre[map[j]]) map[j] = statutCase;
       }
     }
@@ -2747,7 +2794,7 @@ function renderCalendrierDogSitting() {
   for (let i = 0; i < premierJourSemaine; i++) cases += '<div class="ds-case ds-vide"></div>';
   for (let j = 1; j <= nbJours; j++) {
     const statut = occupes[j];
-    const classe = statut === 'attente' ? 'ds-attente' : statut === 'bloque' ? 'ds-bloque' : statut === 'validee' ? 'ds-occupe' : '';
+    const classe = statut === 'attente' ? 'ds-attente' : statut === 'indispo' ? 'ds-indispo' : statut === 'bloque' ? 'ds-bloque' : statut === 'validee' ? 'ds-occupe' : '';
     const dateISO = `${annee}-${String(mois+1).padStart(2,'0')}-${String(j).padStart(2,'0')}`;
     cases += `<div class="ds-case ${classe}" ${classe ? `onclick="window.voirDogSittingJour('${dateISO}')"` : ''}>${j}</div>`;
   }
@@ -2766,6 +2813,7 @@ function renderCalendrierDogSitting() {
     <p style="font-size:0.78rem; color:var(--slate); margin-top:10px;">
       <span style="background:#DCEEE0; padding:2px 8px; border-radius:4px;">Bloqué (acompte validé)</span>
       &nbsp; <span style="background:#FFE58A; padding:2px 8px; border-radius:4px;">Validé, acompte en attente</span>
+      &nbsp; <span style="background:#DADFE3; padding:2px 8px; border-radius:4px;">Indisponible (club)</span>
       &nbsp; <span style="background:#FBEAEA; padding:2px 8px; border-radius:4px;">En attente / conflit</span>
     </p>`;
 }
@@ -2773,14 +2821,62 @@ function renderCalendrierDogSitting() {
 window.dsMoisPrecedent = () => { dsMoisAffiche.setMonth(dsMoisAffiche.getMonth() - 1); renderCalendrierDogSitting(); };
 window.dsMoisSuivant = () => { dsMoisAffiche.setMonth(dsMoisAffiche.getMonth() + 1); renderCalendrierDogSitting(); };
 
+document.getElementById('btnBloquerPeriode').addEventListener('click', () => {
+  const html = `
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-box">
+        <h3>🚫 Bloquer une période</h3>
+        <p style="color:var(--slate); font-size:0.85rem;">Ex : vacances de Katia, indisponibilité du club. Aucun membre ne pourra réserver le Dog Sitting sur cette période.</p>
+        <div class="form-grid">
+          <div class="field"><label>Du</label><input type="date" id="bl-dateDebut"></div>
+          <div class="field"><label>Au</label><input type="date" id="bl-dateFin"></div>
+        </div>
+        <div class="field"><label>Motif (visible uniquement par toi)</label><input id="bl-motif" placeholder="ex: Vacances de Katia"></div>
+        <div class="modal-actions">
+          <button class="btn-sm" onclick="window.fermerModal()">Annuler</button>
+          <button class="btn-sm primary" id="bl-save">Bloquer cette période</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('bl-save').addEventListener('click', async () => {
+    const dateDebut = document.getElementById('bl-dateDebut').value;
+    const dateFin = document.getElementById('bl-dateFin').value;
+    const motif = document.getElementById('bl-motif').value.trim() || 'Indisponible';
+    if (!dateDebut || !dateFin) { alert('Merci de renseigner les deux dates.'); return; }
+    if (dateFin < dateDebut) { alert('La date de fin doit être après la date de début.'); return; }
+    await addDoc(collection(db, 'dogsitting'), {
+      membreId: null, chienNom: null, isBlocage: true, motifBlocage: motif,
+      dateDebut, dateFin, heureArrivee: '', heureDepart: '',
+      statut: 'validee', acompte: null, acompteValide: true,
+      vuParAdmin: true, vuParMembre: true,
+      dateCreation: serverTimestamp()
+    });
+    window.fermerModal();
+    chargerDogSittingAdmin();
+  });
+});
+
+window.supprimerBlocage = async (id) => {
+  if (!confirm('Supprimer ce blocage ? Les membres pourront à nouveau réserver sur cette période.')) return;
+  await deleteDoc(doc(db, 'dogsitting', id));
+  chargerDogSittingAdmin();
+};
+
 window.voirDogSittingJour = (dateISO) => {
-  const concernes = currentDogSitting.filter(r => r.statut !== 'refusee' && r.dateDebut <= dateISO && dateISO <= r.dateFin);
+  const concernes = currentDogSitting.filter(r => r.statut !== 'refusee' && r.statut !== 'annulee' && r.dateDebut <= dateISO && dateISO <= r.dateFin);
   const html = `
     <div class="modal-overlay" id="modalOverlay">
       <div class="modal-box">
         <h3>${new Date(dateISO + 'T00:00:00').toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' })}</h3>
         <div class="data-list">
           ${concernes.map(r => {
+            if (r.isBlocage) {
+              return `<div class="data-row"><div class="data-main">
+                <div class="data-title">🚫 ${escapeHtml(r.motifBlocage || 'Indisponible')}</div>
+                <div class="data-sub">${r.dateDebut} → ${r.dateFin} — <span class="badge badge-neutral">Blocage club</span></div>
+              </div></div>`;
+            }
             const m = currentMembres.find(mm => mm.id === r.membreId);
             return `<div class="data-row"><div class="data-main">
               <div class="data-title">${escapeHtml(r.chienNom)} (${escapeHtml(m?.nomMaitre || '?')})</div>
@@ -2801,9 +2897,23 @@ function renderListeDogSittingAdmin() {
     return;
   }
   wrap.innerHTML = currentDogSitting.map(r => {
+    if (r.isBlocage) {
+      return `
+      <div class="data-row">
+        <div class="data-main">
+          <div class="data-title">🚫 ${escapeHtml(r.motifBlocage || 'Indisponible')} <span class="badge badge-neutral">Blocage club</span></div>
+          <div class="data-sub">Du ${r.dateDebut} au ${r.dateFin}</div>
+        </div>
+        <div class="data-actions">
+          <button class="btn-sm danger" onclick="window.supprimerBlocage('${r.id}')">Supprimer le blocage</button>
+        </div>
+      </div>`;
+    }
+
     const m = currentMembres.find(mm => mm.id === r.membreId);
     const badge = r.statut === 'validee' ? '<span class="badge badge-ok">Validé</span>'
       : r.statut === 'refusee' ? '<span class="badge badge-danger">Refusé</span>'
+      : r.statut === 'annulee' ? '<span class="badge badge-danger">Annulé</span>'
       : '<span class="badge badge-warn">En attente de validation</span>';
 
     let infoAcompte = '';
@@ -2813,6 +2923,9 @@ function renderListeDogSittingAdmin() {
       } else {
         infoAcompte = `<div class="data-sub">Acompte attendu : <strong>${r.acompte.toFixed(2)} €</strong> (30% de ${r.total.toFixed(2)} €) ${r.acomptePaye ? '<span class="badge badge-warn">Membre indique avoir payé</span>' : '<span class="badge badge-neutral">Le membre n\'a pas encore signalé avoir payé l\'acompte</span>'}</div>`;
       }
+    }
+    if (r.statut === 'annulee' && r.motifAnnulation) {
+      infoAcompte += `<div class="data-sub">Motif d'annulation : <em>${escapeHtml(r.motifAnnulation)}</em></div>`;
     }
 
     const apporteLabels = { carnet: 'carnet de santé', couche: 'couche/panier', gamelle: 'gamelle', nourriture: 'nourriture' };
@@ -2847,6 +2960,7 @@ function renderListeDogSittingAdmin() {
           <button class="btn-sm danger" onclick="window.refuserDogSitting('${r.id}')">Refuser</button>
         ` : ''}
         ${r.statut === 'validee' && r.acompte && !r.acompteValide ? `<button class="btn-sm primary" onclick="window.validerAcompteDogSitting('${r.id}')">Valider l'acompte (bloque la date)</button>` : ''}
+        ${r.statut === 'validee' ? `<button class="btn-sm danger" onclick="window.annulerReservationDogSitting('${r.id}')">Annuler cette réservation</button>` : ''}
         <button class="btn-sm danger" onclick="window.supprimerDogSitting('${r.id}')">Supprimer</button>
       </div>
     </div>`;
@@ -2865,10 +2979,41 @@ window.refuserDogSitting = async (id) => {
   await updateDoc(doc(db, 'dogsitting', id), { statut: 'refusee', vuParMembre: false });
   chargerDogSittingAdmin();
 };
+window.annulerReservationDogSitting = (id) => {
+  const html = `
+    <div class="modal-overlay" id="modalOverlayAnnulDS">
+      <div class="modal-box">
+        <h3>Annuler cette réservation</h3>
+        <p style="color:var(--slate); font-size:0.85rem;">La date sera libérée sur le calendrier et le membre en sera informé.</p>
+        <div class="field"><label>Motif de l'annulation</label><textarea id="ds-motif-annul" rows="3" style="width:100%; box-sizing:border-box; resize:vertical;" placeholder="ex: Katia indisponible finalement sur cette période"></textarea></div>
+        <div class="modal-actions">
+          <button class="btn-sm" onclick="document.getElementById('modalOverlayAnnulDS').remove()">Retour</button>
+          <button class="btn-sm danger" id="ds-motif-annul-save">Confirmer l'annulation</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  document.getElementById('ds-motif-annul-save').addEventListener('click', async () => {
+    const motif = document.getElementById('ds-motif-annul').value.trim();
+    if (!motif) { alert('Merci d\'indiquer un motif.'); return; }
+    await updateDoc(doc(db, 'dogsitting', id), { statut: 'annulee', motifAnnulation: motif, vuParMembre: false });
+    document.getElementById('modalOverlayAnnulDS').remove();
+    chargerDogSittingAdmin();
+  });
+};
+
 window.supprimerDogSitting = async (id) => {
   if (!confirm('Supprimer cette demande de Dog Sitting ?')) return;
   await deleteDoc(doc(db, 'dogsitting', id));
   chargerDogSittingAdmin();
+};
+
+window.marquerDogSittingVuAdmin = async () => {
+  const nonVues = currentDogSitting.filter(r => r.vuParAdmin === false);
+  if (nonVues.length === 0) return;
+  await Promise.all(nonVues.map(r => updateDoc(doc(db, 'dogsitting', r.id), { vuParAdmin: true })));
+  nonVues.forEach(r => r.vuParAdmin = true);
+  document.getElementById('tabDogSittingBtn')?.classList.remove('has-unread');
 };
 
 // ==========================================================================
@@ -3096,3 +3241,138 @@ window.sauverContenu = async (champId) => {
   statutEl.textContent = 'Enregistré ✓';
   setTimeout(() => { statutEl.textContent = ''; }, 2500);
 };
+
+// ==========================================================================
+// RÈGLEMENT D'ORDRE INTÉRIEUR (ROI) — texte modifiable par l'admin, à lire
+// et approuver par chaque membre. Un vrai changement de version force tous
+// les membres à réapprouver.
+// ==========================================================================
+const ROI_TEXTE_PAR_DEFAUT = `ARTICLE 1 – Cotisation annuelle
+Toute personne désirant devenir membre devra s'acquitter de sa cotisation annuelle dès la fin de son cours d'accueil (gratuit). Cette cotisation annuelle est de 70€ (TVAC) et non remboursable.
+
+ARTICLE 2 – Cours et/ou cartes d'abonnements
+En plus de la cotisation, chaque maître/maîtresse devra s'acquitter du montant de son cours collectif selon le tarif en vigueur. Il y a la possibilité de prendre un abonnement (fortement recommandé) donnant droit à 10 séances de cours collectifs + 1 gratuite pour la somme de 70€ (TVAC).
+
+Pour l'inscription d'un nouveau membre, lors du premier cours d'accueil, il vous sera demandé de venir avec les documents suivants :
+- La « Fiche Signalétique » et la « Fiche de Renseignements » dûment complétées.
+- Le présent règlement d'ordre intérieur signé et accepté.
+- La présentation du carnet de santé du chien et/ou une copie pour le dossier d'adhésion.
+- Une copie de votre échéance de police d'assurance Responsabilité Civile.
+
+Le chien devra être muni d'un collier souple et d'une laisse de dressage assez longue et adaptée (de préférence en cuir).
+
+ARTICLE 3 – Les cours
+En cours individuel : au prix en vigueur, payable à la fin de la séance.
+En cours collectif d'obéissance : chiots ou adultes selon un horaire à définir. Le membre qui arrive en retard pourrait se voir refuser l'accès au cours, dans un souci d'organisation.
+
+ARTICLE 4 – Canal pour nous suivre
+Le club communique via les canaux qu'il détermine (Facebook, e-mail, ou cet espace membre) pour toute notification concernant les cours (inscription, sondage, modification, annulation, déplacement...).
+
+ARTICLE 5 – Suspension des cours
+Les cours peuvent être suspendus : les jours fériés, en cas d'intempéries, durant les mois les plus rudes de l'hiver, lors des vacances annuelles ou de fin d'année, lors des activités annuelles du club, ou pour tout autre cas non prévu dans cette liste. Toute modification vous sera communiquée à l'avance.
+
+ARTICLE 6 – Santé
+Tous les chiens devront être en ordre de vaccins sous peine d'être refusés au travail. Tout chien ayant un problème de santé contagieux sera refusé au travail tant qu'il n'est pas guéri. Toute chienne en chaleur n'est pas autorisée à travailler. Tout chien pouvant être considéré comme dangereux doit être muselé et fera l'objet d'un travail individuel jusqu'à l'accord de l'éducatrice pour passer en cours collectif.
+
+ARTICLE 7 – Responsabilité civile / Assurances
+Chaque membre doit disposer d'une assurance responsabilité civile (familiale) couvrant les dégâts corporels ou matériels que pourrait causer son chien. Le club décline toute responsabilité en cas d'accident survenu par le fait du chien ou de son maître. Les chiens restent sous l'entière responsabilité de leur maître, qu'ils soient en laisse ou en liberté.
+
+ARTICLE 8 – Interdictions
+Il est strictement interdit de brutaliser un chien, sous peine d'exclusion sans remboursement. Il est également interdit de venir au cours muni d'un collier étrangleur, semi-étrangleur ou à pics, sauf accord explicite de l'éducatrice. Les GSM doivent rester en silencieux pendant toute la durée du cours.
+
+ARTICLE 9 – Convivialité
+Tout membre nuisant à la bonne entente du club par son comportement, son agressivité ou le non-respect des méthodes mises en place pourra être exclu du club sans remboursement de sa cotisation.
+
+ARTICLE 9 BIS
+En cas de changement d'avis en cours d'année, ou de non-acceptation d'une modification du présent règlement, aucun remboursement de la cotisation ne sera effectué.
+
+ARTICLE 10 – Amendes
+Les GSM doivent être éteints ou en silencieux pendant les cours. Le non-respect de cette règle peut entraîner le renvoi du cours.
+
+ARTICLE 11 – Abonnement de cours
+Le club propose un abonnement de 10 leçons + 1 gratuite pour 70€.
+
+ARTICLE 12 – Modification du présent règlement
+Ce règlement peut être modifié à tout moment pour l'adapter aux besoins du club et aux normes en vigueur. Toute modification substantielle vous sera à nouveau soumise pour accord.
+
+Pour accord :
+En cochant la case et en validant depuis mon espace membre, je déclare avoir lu et approuvé le présent règlement d'ordre intérieur.`;
+
+async function chargerRoiAdmin() {
+  const doc_ = await getDoc(doc(db, 'reglement', 'roi'));
+  const version = doc_.exists() ? doc_.data().version : 1;
+  const texte = doc_.exists() ? doc_.data().texte : ROI_TEXTE_PAR_DEFAUT;
+  document.getElementById('roi-texte').value = texte;
+  document.getElementById('roi-versionActuelle').textContent = version;
+
+  const nonApprouves = currentMembres.filter(m => (m.reglementVersionApprouvee || 0) < version);
+  const wrap = document.getElementById('listeRoiNonApprouve');
+  if (nonApprouves.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Tous les membres ont approuvé la version actuelle. 🎉</div>';
+  } else {
+    wrap.innerHTML = nonApprouves.map(m => `
+      <div class="data-row"><div class="data-main"><div class="data-title">${escapeHtml(m.nomMaitre)}</div></div></div>`).join('');
+  }
+}
+
+document.getElementById('btnSauverRoiSansVersion').addEventListener('click', async () => {
+  const statutEl = document.getElementById('roi-statut');
+  statutEl.textContent = 'Enregistrement...';
+  const doc_ = await getDoc(doc(db, 'reglement', 'roi'));
+  const version = doc_.exists() ? doc_.data().version : 1;
+  await setDoc(doc(db, 'reglement', 'roi'), {
+    texte: document.getElementById('roi-texte').value, version, dateModification: serverTimestamp()
+  });
+  statutEl.textContent = 'Enregistré (version inchangée) ✓';
+  chargerRoiAdmin();
+});
+
+document.getElementById('btnPublierNouvelleVersionRoi').addEventListener('click', async () => {
+  if (!confirm('Publier une nouvelle version ? Tous les membres devront relire et réapprouver le règlement.')) return;
+  const statutEl = document.getElementById('roi-statut');
+  statutEl.textContent = 'Publication...';
+  const doc_ = await getDoc(doc(db, 'reglement', 'roi'));
+  const nouvelleVersion = (doc_.exists() ? doc_.data().version : 1) + 1;
+  await setDoc(doc(db, 'reglement', 'roi'), {
+    texte: document.getElementById('roi-texte').value, version: nouvelleVersion, dateModification: serverTimestamp()
+  });
+  statutEl.textContent = `Nouvelle version (${nouvelleVersion}) publiée — les membres devront réapprouver ✓`;
+  chargerRoiAdmin();
+});
+
+// ==========================================================================
+// FICHE DE RENSEIGNEMENTS — réponses anonymes agrégées (lecture seule,
+// aucun lien possible avec un membre précis).
+// ==========================================================================
+async function chargerEnquetesAnonymesAdmin() {
+  const wrap = document.getElementById('listeEnquetesAnonymes');
+  if (!wrap) return;
+  const snap = await getDocs(collection(db, 'enquetes_anonymes'));
+  const reponses = [];
+  snap.forEach(d => reponses.push(d.data()));
+
+  if (reponses.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucune réponse pour l\'instant.</div>';
+    return;
+  }
+
+  wrap.innerHTML = reponses.map((r, i) => `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">Réponse anonyme n°${i + 1}</div>
+        <div class="data-sub">
+          Âge : ${escapeHtml(r.age || '—')} · Race : ${escapeHtml(r.race || '—')} (${escapeHtml(r.sexe || '—')})<br>
+          Élevage : ${escapeHtml(r.elevage || '—')} · Retrait à ${escapeHtml(String(r.ageRetrait || '—'))} semaines<br>
+          Vu régulièrement chez l'éleveur : ${escapeHtml(r.vuRegulierement || '—')} · Choisi soi-même : ${escapeHtml(r.choisiSoiMeme || '—')}<br>
+          ${r.criteres ? `Critères de choix : ${escapeHtml(r.criteres)}<br>` : ''}
+          Premier chien : ${escapeHtml(r.premierChien || '—')}
+          ${r.recherche ? `<br>Recherche longue : ${escapeHtml(r.recherche)}` : ''}
+          ${r.pourquoiSexe ? `<br>Pourquoi ce sexe : ${escapeHtml(r.pourquoiSexe)}` : ''}
+          ${r.enfants ? `<br>Enfants : ${escapeHtml(r.enfants)}` : ''}
+          ${r.connaissanceRace ? `<br>Connaissance de la race : ${escapeHtml(r.connaissanceRace)}` : ''}
+          ${r.raisonsChoix ? `<br>Raisons du choix : <em>${escapeHtml(r.raisonsChoix)}</em>` : ''}
+          ${r.premieresSemaines ? `<br>Premières semaines : <em>${escapeHtml(r.premieresSemaines)}</em>` : ''}
+        </div>
+      </div>
+    </div>`).join('');
+}
