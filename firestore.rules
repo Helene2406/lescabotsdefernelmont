@@ -119,7 +119,13 @@ service cloud.firestore {
       // chevauchements de dates entre TOUS les membres avant réservation).
       allow read: if estConnecte();
       allow create: if estConnecte() && request.resource.data.membreId == request.auth.uid;
-      allow update, delete: if estAdmin();
+      // Le membre peut mettre à jour SA PROPRE demande, mais seulement pour
+      // signaler un paiement d'acompte ou marquer une notification comme vue
+      // — tout le reste (statut, validation, acompte validé...) reste
+      // réservé à l'admin.
+      allow update: if estAdmin() || (estConnecte() && resource.data.membreId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['acomptePaye', 'vuParMembre']));
+      allow delete: if estAdmin();
     }
 
     match /campagnes/{id} {
