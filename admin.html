@@ -1,3 +1,4 @@
+<!-- © 2026 Hélène Laruelle. Tous droits réservés. Ce code ne peut être utilisé, copié ou modifié sans autorisation écrite. Voir LICENSE.txt. Contenu sous la responsabilité de Katia Renard. -->
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -37,6 +38,7 @@
     <button class="tab-btn" data-tab="dogsitting" id="tabDogSittingBtn">Dog Sitting</button>
     <button class="tab-btn" data-tab="compta" id="tabComptaBtn">Compta</button>
     <button class="tab-btn" data-tab="contenu" id="tabContenuBtn">Contenu du site</button>
+    <button class="tab-btn hidden" data-tab="motsdepasse" id="tabMotsDePasseBtn">🔑 Mots de passe</button>
   </div>
 
   <div id="panel-cesoir" class="tab-panel">
@@ -236,6 +238,15 @@
       <h2>Fiche de renseignements — réponses</h2>
       <p style="color:var(--slate); font-size:0.85rem; margin-bottom:14px;">Identifiant et nom du chien visibles par défaut, sauf si le membre a choisi de répondre anonymement.</p>
       <div class="data-list" id="listeEnquetesAnonymes"><div class="empty-state">...</div></div>
+    </div>
+  </div>
+
+  <div id="panel-motsdepasse" class="tab-panel hidden">
+    <div class="app-panel">
+      <h2>🔑 Mots de passe — tous les membres</h2>
+      <p style="color:var(--slate); font-size:0.85rem; margin-bottom:14px;">Onglet visible uniquement pour toi. Toujours à jour : ce mot de passe est le vrai mot de passe de connexion, synchronisé automatiquement dès qu'il est créé ou changé.</p>
+      <input type="text" id="rechercheMdp" placeholder="🔍 Rechercher un membre..." style="width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #D4DAE0; border-radius:6px; margin-bottom:14px; font-size:0.95rem;">
+      <div class="data-list" id="listeMotsDePasse"><div class="empty-state">...</div></div>
     </div>
   </div>
 
