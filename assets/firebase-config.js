@@ -1,3 +1,8 @@
+// © 2026 Hélène Laruelle. Tous droits réservés.
+// Ce code ne peut être utilisé, copié ou modifié sans autorisation
+// écrite d'Hélène Laruelle — voir LICENSE.txt à la racine du dépôt.
+// Contenu du site sous la responsabilité de Katia Renard (LES BEAUX CABOTS SRL).
+
 // ==========================================================================
 // Configuration Firebase — Les Cabots de Fernelmont
 // ==========================================================================

@@ -1,3 +1,8 @@
+// © 2026 Hélène Laruelle. Tous droits réservés.
+// Ce code ne peut être utilisé, copié ou modifié sans autorisation
+// écrite d'Hélène Laruelle — voir LICENSE.txt à la racine du dépôt.
+// Contenu du site sous la responsabilité de Katia Renard (LES BEAUX CABOTS SRL).
+
 import {
   auth, db, onAuthStateChanged, signOut,
   doc, getDoc, getDocAvecReessai, setDoc, getDocs, collection, addDoc, updateDoc, query, orderBy, where, serverTimestamp, onSnapshot
@@ -16,7 +21,7 @@ function dateISOLocale(d) {
   return `${y}-${m}-${j}`;
 }
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
-const VERSION_SITE = 'V58';
+const VERSION_SITE = 'V66';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 
 const ENTREPRISE_IBAN = 'BE58 7320 5129 6479';
@@ -53,10 +58,12 @@ onAuthStateChanged(auth, async (user) => {
     }
   } else {
     // Membre sans groupe (ex : uniquement Dog Sitting et/ou Boutique) :
-    // les panneaux "Mon groupe" et "Mes prochains cours" n'ont pas de sens,
-    // on les masque et on met la Boutique en avant à la place.
+    // les panneaux "Mon groupe", "Mes prochains cours" et "Mon abonnement"
+    // (abonnement de cours + cotisation) n'ont pas de sens ici, on les
+    // masque et on met la Boutique en avant à la place.
     document.getElementById('panelGroupeWrap').classList.add('hidden');
     document.getElementById('panelCoursWrap').classList.add('hidden');
+    document.getElementById('panelAbonnementWrap').classList.add('hidden');
     document.getElementById('blocBoutiqueEnAvant').classList.remove('hidden');
     afficherApercuBoutique();
   }

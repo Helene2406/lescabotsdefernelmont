@@ -1,3 +1,8 @@
+// © 2026 Hélène Laruelle. Tous droits réservés.
+// Ce code ne peut être utilisé, copié ou modifié sans autorisation
+// écrite d'Hélène Laruelle — voir LICENSE.txt à la racine du dépôt.
+// Contenu du site sous la responsabilité de Katia Renard (LES BEAUX CABOTS SRL).
+
 import {
   auth, db, onAuthStateChanged, signOut,
   doc, getDoc, getDocAvecReessai, setDoc, updateDoc, deleteDoc,
@@ -22,7 +27,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V58';
+const VERSION_SITE = 'V66';
 document.getElementById('versionTag').textContent = VERSION_SITE;
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
@@ -38,6 +43,14 @@ onAuthStateChanged(auth, async (user) => {
     return;
   }
   document.getElementById('adminNom').textContent = mDoc.data().nomMaitre || 'Katia';
+
+  // Onglet "Mots de passe" réservé exclusivement à Hélène — aucun changement
+  // pour le compte Admin (Katia), qui ne voit jamais cet onglet.
+  if (user.email === identifiantVersEmail('HeleneL')) {
+    document.getElementById('tabMotsDePasseBtn').classList.remove('hidden');
+    chargerListeAdminsPourMdp();
+  }
+
   await chargerGroupes();
   await chargerMembres();
   await chargerServices();
@@ -314,6 +327,7 @@ async function chargerMembres() {
   });
   renderMembres();
   renderGroupes();
+  chargerMotsDePasseAdmin();
 }
 
 function nomsChiensActifs(membre) {
@@ -561,27 +575,32 @@ function ouvrirModalMembre(membre) {
 
         <h3 style="margin-top:18px;">Groupe &amp; abonnement</h3>
         <div class="field"><label>Groupe par défaut</label><select id="mm-groupe"></select></div>
-        <div class="form-grid">
-          <div class="field"><label>Cours restants (abonnement)</label><input type="number" id="mm-coursRestants" value="${isEdit ? (membre.coursRestants ?? 11) : 11}"></div>
-          <div class="field"><label>Abonnement payé</label>
-            <select id="mm-aboPaye">
-              <option value="oui" ${isEdit && membre.abonnementPaye ? 'selected':''}>Oui</option>
-              <option value="non" ${isEdit && !membre.abonnementPaye ? 'selected':''}>Non</option>
-            </select>
+        <div id="mm-blocAbonnement">
+          <div class="form-grid">
+            <div class="field"><label>Cours restants (abonnement)</label><input type="number" id="mm-coursRestants" value="${isEdit ? (membre.coursRestants ?? 11) : 11}"></div>
+            <div class="field"><label>Abonnement payé</label>
+              <select id="mm-aboPaye">
+                <option value="oui" ${isEdit && membre.abonnementPaye ? 'selected':''}>Oui</option>
+                <option value="non" ${isEdit && !membre.abonnementPaye ? 'selected':''}>Non</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        <h3 style="margin-top:18px;">Cotisation annuelle du club</h3>
-        <div class="form-grid">
-          <div class="field"><label>Date d'échéance</label><input type="date" id="mm-cotisEcheance" value="${membre?.cotisationDateEcheance||''}"></div>
-          <div class="field"><label>Payée</label>
-            <select id="mm-cotisPaye">
-              <option value="oui" ${isEdit && membre.cotisationPayee ? 'selected':''}>Oui</option>
-              <option value="non" ${isEdit && !membre.cotisationPayee ? 'selected':''}>Non</option>
-            </select>
+        <div id="mm-blocCotisation">
+          <h3 style="margin-top:18px;">Cotisation annuelle du club</h3>
+          <div class="form-grid">
+            <div class="field"><label>Date d'échéance</label><input type="date" id="mm-cotisEcheance" value="${membre?.cotisationDateEcheance||''}"></div>
+            <div class="field"><label>Payée</label>
+              <select id="mm-cotisPaye">
+                <option value="oui" ${isEdit && membre.cotisationPayee ? 'selected':''}>Oui</option>
+                <option value="non" ${isEdit && !membre.cotisationPayee ? 'selected':''}>Non</option>
+              </select>
+            </div>
           </div>
+          ${isEdit && membre.cotisationRenouvellement ? `<p style="font-size:0.85rem; color:var(--slate);">Réponse du membre au renouvellement : <strong>${membre.cotisationRenouvellement === 'oui' ? 'Oui, elle/il souhaite renouveler' : 'Non, elle/il ne souhaite pas renouveler'}</strong></p>` : ''}
         </div>
-        ${isEdit && membre.cotisationRenouvellement ? `<p style="font-size:0.85rem; color:var(--slate);">Réponse du membre au renouvellement : <strong>${membre.cotisationRenouvellement === 'oui' ? 'Oui, elle/il souhaite renouveler' : 'Non, elle/il ne souhaite pas renouveler'}</strong></p>` : ''}
+        <p id="mm-sansGroupeNote" class="hidden" style="font-size:0.85rem; color:var(--slate); font-style:italic;">Aucun groupe sélectionné : ce membre n'a ni abonnement de cours ni cotisation (accès Boutique/Dog Sitting uniquement). Ces champs sont mis à 0 automatiquement.</p>
 
         ${isEdit ? `
         <h3 style="margin-top:18px;">Paiements</h3>
@@ -606,6 +625,15 @@ function ouvrirModalMembre(membre) {
     document.getElementById('mm-btnChangerMdp')?.addEventListener('click', () => window.changerMotDePasseMembre(membre.id, membre.identifiant, membre.motDePasseInitial));
   }
 
+  function actualiserVisibiliteAbonnementCotisation() {
+    const aUnGroupe = !!document.getElementById('mm-groupe').value;
+    document.getElementById('mm-blocAbonnement').classList.toggle('hidden', !aUnGroupe);
+    document.getElementById('mm-blocCotisation').classList.toggle('hidden', !aUnGroupe);
+    document.getElementById('mm-sansGroupeNote').classList.toggle('hidden', aUnGroupe);
+  }
+  actualiserVisibiliteAbonnementCotisation();
+  document.getElementById('mm-groupe').addEventListener('change', actualiserVisibiliteAbonnementCotisation);
+
   document.getElementById('mm-save').addEventListener('click', async () => {
     const btnSave = document.getElementById('mm-save');
     btnSave.disabled = true;
@@ -629,10 +657,10 @@ function ouvrirModalMembre(membre) {
       },
       accesDogSitting: document.getElementById('mm-accesDogSitting').value === 'oui',
       groupeId: document.getElementById('mm-groupe').value || null,
-      coursRestants: parseInt(document.getElementById('mm-coursRestants').value, 10) || 0,
-      abonnementPaye: document.getElementById('mm-aboPaye').value === 'oui',
-      cotisationPayee: document.getElementById('mm-cotisPaye').value === 'oui',
-      cotisationDateEcheance: document.getElementById('mm-cotisEcheance').value
+      coursRestants: document.getElementById('mm-groupe').value ? (parseInt(document.getElementById('mm-coursRestants').value, 10) || 0) : 0,
+      abonnementPaye: document.getElementById('mm-groupe').value ? document.getElementById('mm-aboPaye').value === 'oui' : false,
+      cotisationPayee: document.getElementById('mm-groupe').value ? document.getElementById('mm-cotisPaye').value === 'oui' : false,
+      cotisationDateEcheance: document.getElementById('mm-groupe').value ? document.getElementById('mm-cotisEcheance').value : ''
     };
     if (isEdit) {
       data.motDePasseInitial = document.getElementById('mm-mdpRef').value.trim();
@@ -1859,7 +1887,7 @@ async function chargerAbonnementsARenouveler() {
   const zone = document.getElementById('abonnementsARenouveler');
   if (!zone) return;
 
-  const concernes = currentMembres.filter(m => (m.coursRestants ?? 0) <= 2);
+  const concernes = currentMembres.filter(m => m.groupeId && (m.coursRestants ?? 0) <= 2);
   if (concernes.length === 0) { zone.innerHTML = ''; return; }
 
   const serviceAbonnement = currentServices.find(s => s.nom === 'Cours collectif') || {};
@@ -3414,8 +3442,9 @@ document.getElementById('btnMonCompte').addEventListener('click', () => {
       const credential = EmailAuthProvider.credential(auth.currentUser.email, actuel);
       await reauthenticateWithCredential(auth.currentUser, credential);
       await updatePassword(auth.currentUser, nouveau);
+      await updateDoc(doc(db, 'membres', auth.currentUser.uid), { motDePasseInitial: nouveau });
       statutEl.textContent = 'Mot de passe changé avec succès ✓';
-      setTimeout(() => window.fermerModal(), 1500);
+      setTimeout(() => { window.fermerModal(); chargerMotsDePasseAdmin(); }, 1500);
     } catch (err) {
       statutEl.textContent = err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential'
         ? 'Mot de passe actuel incorrect.'
@@ -3463,9 +3492,62 @@ window.changerMotDePasseMembre = (membreId, identifiant, motDePasseActuel) => {
         document.getElementById('modalOverlayMdpMembre')?.remove();
         window.fermerModal();
         chargerMembres();
+        chargerListeAdminsPourMdp();
       }, 1200);
     } catch (err) {
       statutEl.textContent = 'Erreur : le mot de passe actuel enregistré ne correspond plus au vrai mot de passe du compte (' + (err.code || err.message) + '). Recontacte le membre pour connaître son mot de passe actuel, mets-le à jour dans le champ "référence", puis réessaie.';
     }
   });
 };
+
+// ==========================================================================
+// MOTS DE PASSE — onglet exclusif à Hélène (voir la détection à la
+// connexion). Vue consolidée de tous les membres avec leur identifiant et
+// leur vrai mot de passe de connexion actuel (toujours synchronisé, aucun
+// self-service de mot de passe n'existe côté membre — la seule façon dont
+// il change est via ce même panneau ou la création du compte).
+// ==========================================================================
+let currentAdminsPourMdp = [];
+
+async function chargerListeAdminsPourMdp() {
+  const snap = await getDocs(query(collection(db, 'membres'), where('role', '==', 'admin')));
+  currentAdminsPourMdp = [];
+  snap.forEach(d => currentAdminsPourMdp.push({ id: d.id, ...d.data() }));
+  chargerMotsDePasseAdmin();
+}
+
+function chargerMotsDePasseAdmin() {
+  const wrap = document.getElementById('listeMotsDePasse');
+  if (!wrap) return;
+
+  const terme = (document.getElementById('rechercheMdp')?.value || '').trim().toLowerCase();
+  let tous = [
+    ...currentAdminsPourMdp.map(m => ({ ...m, estAdminCompte: true })),
+    ...currentMembres.map(m => ({ ...m, estAdminCompte: false }))
+  ].sort((a, b) => (a.nomMaitre || '').localeCompare(b.nomMaitre || '', 'fr'));
+
+  if (terme) {
+    tous = tous.filter(m =>
+      (m.nomMaitre || '').toLowerCase().includes(terme) ||
+      (m.identifiant || '').toLowerCase().includes(terme)
+    );
+  }
+
+  if (tous.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucun compte trouvé.</div>';
+    return;
+  }
+
+  wrap.innerHTML = tous.map(m => `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(m.nomMaitre || '?')} ${m.estAdminCompte ? '<span class="badge badge-ok">Admin</span>' : ''}</div>
+        <div class="data-sub">Identifiant : <strong>${escapeHtml(m.identifiant || '—')}</strong>${m.motDePasseInitial ? ` · Mot de passe : <strong>${escapeHtml(m.motDePasseInitial)}</strong>` : ' · <span class="badge badge-neutral">mot de passe inconnu</span>'}</div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm" onclick="window.changerMotDePasseMembre('${m.id}', '${escapeAttr(m.identifiant)}', '${escapeAttr(m.motDePasseInitial||'')}')" ${!m.motDePasseInitial ? 'disabled title="Mot de passe actuel inconnu — impossible de le changer depuis ici tant qu\'il n\'est pas connu (voir Firebase Console pour un compte totalement perdu)."' : ''}>Changer</button>
+      </div>
+    </div>`).join('');
+}
+
+document.getElementById('rechercheMdp')?.addEventListener('input', () => chargerMotsDePasseAdmin());
