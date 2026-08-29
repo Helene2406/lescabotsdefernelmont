@@ -9,10 +9,10 @@ import {
   collection, addDoc, getDocs, query, where,
   serverTimestamp, identifiantVersEmail
 } from "./firebase-config.js";
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
 import { getAuth as getAuthSecondary, createUserWithEmailAndPassword, signOut as signOutSecondary,
   signInWithEmailAndPassword as signInSecondary, updatePassword as updatePasswordSecondary,
-  updatePassword, reauthenticateWithCredential, EmailAuthProvider }
+  updatePassword, reauthenticateWithCredential, EmailAuthProvider, setPersistence, inMemoryPersistence }
   from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import { meteoActuelle, meteoPour, alerteMeteo, iconeCode } from "./meteo.js";
 
@@ -27,8 +27,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V66';
-document.getElementById('versionTag').textContent = VERSION_SITE;
+const VERSION_SITE = 'V70';
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
 let currentGroupes = [];
@@ -44,10 +43,13 @@ onAuthStateChanged(auth, async (user) => {
   }
   document.getElementById('adminNom').textContent = mDoc.data().nomMaitre || 'Katia';
 
-  // Onglet "Mots de passe" réservé exclusivement à Hélène — aucun changement
-  // pour le compte Admin (Katia), qui ne voit jamais cet onglet.
+  // Onglet "Mots de passe" + numéro de version : réservés exclusivement à
+  // Hélène. La fraise 🍓 reste réservée à Katia (Admin) uniquement — donc
+  // masquée pour Hélène. Aucun changement pour le compte Admin.
   if (user.email === identifiantVersEmail('HeleneL')) {
     document.getElementById('tabMotsDePasseBtn').classList.remove('hidden');
+    document.getElementById('versionTag').textContent = VERSION_SITE;
+    document.getElementById('fraiseDiscrete')?.remove();
     chargerListeAdminsPourMdp();
   }
 
@@ -434,6 +436,7 @@ function ouvrirModalImportMembres() {
       const secondaryApp = initializeApp(auth.app.options, 'import-' + Date.now() + '-' + Math.random());
       const secondaryAuth = getAuthSecondary(secondaryApp);
       try {
+        await setPersistence(secondaryAuth, inMemoryPersistence);
         const cred = await createUserWithEmailAndPassword(secondaryAuth, email, mdp);
         await setDoc(doc(db, 'membres', cred.user.uid), {
           nomMaitre, identifiant, motDePasseInitial: mdp, role: 'membre', archive: false,
@@ -444,8 +447,10 @@ function ouvrirModalImportMembres() {
           dateInscription: serverTimestamp()
         });
         await signOutSecondary(secondaryAuth);
+        await deleteApp(secondaryApp);
         succes++;
       } catch (e) {
+        try { await deleteApp(secondaryApp); } catch (e2) { /* déjà supprimée ou jamais créée */ }
         erreurs.push(`"${nomMaitre}" (${identifiant}) : ${e.code === 'auth/email-already-in-use' ? 'identifiant déjà utilisé' : e.message}`);
       }
     }
@@ -686,6 +691,7 @@ function ouvrirModalMembre(membre) {
       const secondaryApp = initializeApp(auth.app.options, 'secondaire-' + Date.now());
       const secondaryAuth = getAuthSecondary(secondaryApp);
       try {
+        await setPersistence(secondaryAuth, inMemoryPersistence);
         const cred = await createUserWithEmailAndPassword(secondaryAuth, email, mdp);
         await setDoc(doc(db, 'membres', cred.user.uid), {
           ...data,
@@ -697,9 +703,11 @@ function ouvrirModalMembre(membre) {
           dateInscription: serverTimestamp()
         });
         await signOutSecondary(secondaryAuth);
+        await deleteApp(secondaryApp);
         window.fermerModal();
         chargerMembres().then(() => { chargerConversations(); chargerAnniversaires(); chargerCotisationsARenouveler(); chargerAbonnementsARenouveler(); chargerVaccinsARappeler(); });
       } catch (err) {
+        try { await deleteApp(secondaryApp); } catch (e2) { /* déjà supprimée ou jamais créée */ }
         alert("Impossible de créer ce membre : " + (err.code === 'auth/email-already-in-use' ? 'cet identifiant existe déjà.' : err.message));
         btnSave.disabled = false;
         btnSave.textContent = 'Enregistrer';
@@ -3483,10 +3491,15 @@ window.changerMotDePasseMembre = (membreId, identifiant, motDePasseActuel) => {
     const secondaryApp = initializeApp(auth.app.options, 'mdp-membre-' + Date.now());
     const secondaryAuth = getAuthSecondary(secondaryApp);
     try {
+      // Persistance en mémoire uniquement : cette session temporaire ne
+      // touche jamais le stockage du navigateur, donc ne peut jamais
+      // interférer avec ta propre session admin en cours.
+      await setPersistence(secondaryAuth, inMemoryPersistence);
       await signInSecondary(secondaryAuth, email, motDePasseActuel);
       await updatePasswordSecondary(secondaryAuth.currentUser, nouveau);
-      await signOutSecondary(secondaryAuth);
       await updateDoc(doc(db, 'membres', membreId), { motDePasseInitial: nouveau });
+      await signOutSecondary(secondaryAuth);
+      await deleteApp(secondaryApp);
       statutEl.textContent = 'Mot de passe changé avec succès ✓';
       setTimeout(() => {
         document.getElementById('modalOverlayMdpMembre')?.remove();
@@ -3495,7 +3508,12 @@ window.changerMotDePasseMembre = (membreId, identifiant, motDePasseActuel) => {
         chargerListeAdminsPourMdp();
       }, 1200);
     } catch (err) {
-      statutEl.textContent = 'Erreur : le mot de passe actuel enregistré ne correspond plus au vrai mot de passe du compte (' + (err.code || err.message) + '). Recontacte le membre pour connaître son mot de passe actuel, mets-le à jour dans le champ "référence", puis réessaie.';
+      console.error('Erreur changement mot de passe :', err);
+      try { await deleteApp(secondaryApp); } catch (e2) { /* déjà supprimée ou jamais créée */ }
+      statutEl.textContent = `Erreur (${err.code || 'inconnue'}) : ${err.message || err}. ` +
+        (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password'
+          ? 'Le mot de passe actuel enregistré ne correspond plus au vrai mot de passe du compte — recontacte la personne, mets à jour le champ "référence" avec la vraie valeur actuelle, puis réessaie.'
+          : 'Regarde la console du navigateur (F12) pour le détail technique complet si besoin.');
     }
   });
 };
@@ -3551,3 +3569,121 @@ function chargerMotsDePasseAdmin() {
 }
 
 document.getElementById('rechercheMdp')?.addEventListener('input', () => chargerMotsDePasseAdmin());
+
+// ==========================================================================
+// EXPORT ODOO — génère un CSV prêt à importer dans Odoo (Comptabilité →
+// Clients → Factures → Importer des enregistrements). Une ligne par ligne
+// de facture ; les lignes d'une même facture partagent le même "id" externe
+// (convention standard d'import Odoo pour les champs one2many).
+// Les prix stockés côté club sont TTC : on recalcule le prix unitaire HT
+// pour laisser Odoo appliquer lui-même la TVA via le code de taxe standard,
+// évitant toute double comptabilisation.
+// ==========================================================================
+function echapperCsv(valeur) {
+  const s = String(valeur ?? '');
+  if (s.includes(';') || s.includes('"') || s.includes('\n')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function genererLignesCsvOdoo(documents, typeMouvement) {
+  const entetes = ['id', 'move_type', 'partner_id/name', 'partner_id/street', 'partner_id/email', 'partner_id/phone',
+    'invoice_date', 'invoice_date_due', 'ref', 'invoice_line_ids/name', 'invoice_line_ids/quantity',
+    'invoice_line_ids/price_unit', 'invoice_line_ids/tax_ids',
+    'Prix HTVA (référence)', 'TVA 21% (référence)', 'Contrôle HTVA+TVA=TTC'];
+
+  const lignesCsv = [entetes.join(';')];
+
+  documents.forEach(docu => {
+    const membre = currentMembres.find(m => m.id === docu.membreId) || currentMembresArchives.find(m => m.id === docu.membreId);
+    const idExterne = 'CABOTS_' + docu.numero.replace(/[^a-zA-Z0-9]/g, '_');
+
+    (docu.lignes || []).forEach((ligne, i) => {
+      const prixTTC = ligne.prixUnitaireTTC;
+      // HTVA = TTC / 1.21, arrondi à 2 décimales.
+      const prixUnitaireHT = Math.round((prixTTC / 1.21) * 100) / 100;
+      // TVA dérivée par soustraction (jamais recalculée indépendamment) :
+      // garantit HTVA + TVA = TTC à l'euro-cent près, sans écart d'arrondi.
+      const tva = Math.round((prixTTC - prixUnitaireHT) * 100) / 100;
+      const controle = Math.round((prixUnitaireHT + tva) * 100) / 100 === Math.round(prixTTC * 100) / 100 ? 'OK' : '⚠️ ÉCART';
+
+      const premiereLigne = i === 0;
+      lignesCsv.push([
+        idExterne,
+        typeMouvement,
+        premiereLigne ? echapperCsv(membre?.nomMaitre || 'Client inconnu') : '',
+        premiereLigne ? echapperCsv(membre?.adressePostale || '') : '',
+        premiereLigne ? echapperCsv(membre?.email || '') : '',
+        premiereLigne ? echapperCsv(membre?.gsm || '') : '',
+        premiereLigne ? docu.dateEmission : '',
+        premiereLigne ? docu.dateEmission : '',
+        premiereLigne ? echapperCsv(docu.numero + (docu.factureOrigineNumero ? ' (annule ' + docu.factureOrigineNumero + ')' : '')) : '',
+        echapperCsv(ligne.description),
+        ligne.quantite,
+        prixUnitaireHT.toFixed(2),
+        'TVA 21%',
+        prixUnitaireHT.toFixed(2),
+        tva.toFixed(2),
+        controle
+      ].join(';'));
+    });
+  });
+
+  return lignesCsv.join('\n');
+}
+
+function telechargerCsv(contenu, nomFichier) {
+  const blob = new Blob(['\uFEFF' + contenu], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = nomFichier;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById('btnExporterOdoo').addEventListener('click', async () => {
+  const statutEl = document.getElementById('odoo-statut');
+  const dateDebut = document.getElementById('odoo-dateDebut').value;
+  const dateFin = document.getElementById('odoo-dateFin').value;
+
+  statutEl.textContent = 'Préparation de l\'export...';
+  const snap = await getDocs(collection(db, 'factures'));
+  let factures = [];
+  snap.forEach(d => factures.push({ id: d.id, ...d.data() }));
+  if (dateDebut) factures = factures.filter(f => f.dateEmission >= dateDebut);
+  if (dateFin) factures = factures.filter(f => f.dateEmission <= dateFin);
+  factures.sort((a, b) => (a.dateEmission || '').localeCompare(b.dateEmission || ''));
+
+  if (factures.length === 0) {
+    statutEl.textContent = 'Aucune facture trouvée sur cette période.';
+    return;
+  }
+
+  const csv = genererLignesCsvOdoo(factures, 'out_invoice');
+  telechargerCsv(csv, `Export_Odoo_Factures_${dateDebut || 'debut'}_${dateFin || 'fin'}.csv`);
+  statutEl.textContent = `${factures.length} facture(s) exportée(s) ✓ — teste d'abord l'import avec 1 ou 2 factures avant de tout importer d'un coup.`;
+});
+
+document.getElementById('btnExporterOdooNC').addEventListener('click', async () => {
+  const statutEl = document.getElementById('odoo-statut');
+  const dateDebut = document.getElementById('odoo-dateDebut').value;
+  const dateFin = document.getElementById('odoo-dateFin').value;
+
+  statutEl.textContent = 'Préparation de l\'export...';
+  const snap = await getDocs(collection(db, 'notes_credit'));
+  let nc = [];
+  snap.forEach(d => nc.push({ id: d.id, ...d.data() }));
+  if (dateDebut) nc = nc.filter(n => n.dateEmission >= dateDebut);
+  if (dateFin) nc = nc.filter(n => n.dateEmission <= dateFin);
+  nc.sort((a, b) => (a.dateEmission || '').localeCompare(b.dateEmission || ''));
+
+  if (nc.length === 0) {
+    statutEl.textContent = 'Aucune note de crédit trouvée sur cette période.';
+    return;
+  }
+
+  const csv = genererLignesCsvOdoo(nc, 'out_refund');
+  telechargerCsv(csv, `Export_Odoo_NotesCredit_${dateDebut || 'debut'}_${dateFin || 'fin'}.csv`);
+  statutEl.textContent = `${nc.length} note(s) de crédit exportée(s) ✓`;
+});
