@@ -44,7 +44,7 @@
 </div>
 
 <script type="module">
-  import { auth, signInWithEmailAndPassword, onAuthStateChanged, identifiantVersEmail, db, doc, getDocFromServer, collection, getDocs, query, where }
+  import { auth, signInWithEmailAndPassword, onAuthStateChanged, identifiantVersEmail, db, doc, getDocFromServer, collection, getDocs, query, where, updateDoc }
     from "./assets/firebase-config.js";
 
   const form = document.getElementById('loginForm');
@@ -113,6 +113,14 @@
         return;
       }
       const role = membreDoc.data().role;
+
+      // Garde toujours une référence à jour du mot de passe actuel — utile
+      // pour dépanner quelqu'un qui l'oublie, quelle que soit la façon
+      // dont il a été défini ou changé.
+      if (membreDoc.data().motDePasseInitial !== motdepasse) {
+        updateDoc(doc(db, 'membres', cred.user.uid), { motDePasseInitial: motdepasse }).catch(() => {});
+      }
+
       window.location.href = role === 'admin' ? 'admin.html' : 'espace-membre.html';
     } catch (err) {
       errorBox.textContent = "Erreur Firestore : " + err.code + " — " + err.message;

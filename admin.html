@@ -15,7 +15,7 @@
 <body class="app-body">
 
 <div class="app-topbar">
-  <div class="app-title">Bonjour <span id="adminNom">Katia</span> <span class="fraise-discrete" title="🍓">🍓</span> <small>Espace administrateur · <span id="versionTag" style="opacity:0.6;"></span></small></div>
+  <div class="app-title">Bonjour <span id="adminNom">Katia</span> <span class="fraise-discrete" id="fraiseDiscrete" title="🍓">🍓</span> <small>Espace administrateur · <span id="versionTag" style="opacity:0.6;"></span></small></div>
   <div style="display:flex; align-items:center; gap:8px;">
     <button class="btn-sm" id="btnMonCompte" style="background:transparent; border-color:rgba(255,255,255,0.4); color:#fff;">🔑 Mon compte</button>
     <button class="btn-sm" id="logoutBtn" style="background:transparent; border-color:rgba(255,255,255,0.4); color:#fff;">Déconnexion</button>
@@ -206,6 +206,18 @@
       <h2>Historique des factures et notes de crédit</h2>
       <input type="text" id="rechercheCompta" placeholder="🔍 Rechercher un membre ou un numéro..." style="width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #D4DAE0; border-radius:6px; margin-bottom:14px; font-size:0.95rem;">
       <div class="data-list" id="listeCompta"><div class="empty-state">...</div></div>
+    </div>
+
+    <div class="app-panel">
+      <h2>Export pour Odoo</h2>
+      <p style="color:var(--slate); font-size:0.85rem; margin-bottom:14px;">Génère un fichier CSV prêt à importer dans Odoo (Comptabilité → Clients → Factures → Importer des enregistrements). Toutes les mentions légales sont incluses (numéro d'origine en référence, dates, client, lignes, TVA).</p>
+      <div class="form-grid">
+        <div class="field"><label>Du</label><input type="date" id="odoo-dateDebut"></div>
+        <div class="field"><label>Au</label><input type="date" id="odoo-dateFin"></div>
+      </div>
+      <button class="btn-sm primary" id="btnExporterOdoo">📤 Exporter les factures (CSV)</button>
+      <button class="btn-sm" id="btnExporterOdooNC" style="margin-left:8px;">📤 Exporter les notes de crédit (CSV)</button>
+      <p id="odoo-statut" style="font-size:0.85rem; color:var(--slate); margin-top:8px;"></p>
     </div>
   </div>
 
