@@ -117,9 +117,12 @@
       // Garde toujours une référence à jour du mot de passe actuel — utile
       // pour dépanner quelqu'un qui l'oublie, quelle que soit la façon
       // dont il a été défini ou changé.
+      const misesAJour = {};
       if (membreDoc.data().motDePasseInitial !== motdepasse) {
-        updateDoc(doc(db, 'membres', cred.user.uid), { motDePasseInitial: motdepasse }).catch(() => {});
+        misesAJour.motDePasseInitial = motdepasse;
       }
+      misesAJour.derniereConnexion = new Date().toISOString();
+      updateDoc(doc(db, 'membres', cred.user.uid), misesAJour).catch(() => {});
 
       window.location.href = role === 'admin' ? 'admin.html' : 'espace-membre.html';
     } catch (err) {

@@ -17,7 +17,7 @@ service cloud.firestore {
                   'cotisationRenouvellement','abonnementRenouvellement','dernierBlogVu',
                   'trouveVia','trouveViaDetail','conducteurNom','conducteurGsm','conducteurEmail',
                   'reglementApprouve','reglementApprouveLe','reglementVersionApprouvee',
-                  'enqueteRenseignementsSoumise','motDePasseInitial']);
+                  'enqueteRenseignementsSoumise','motDePasseInitial','derniereConnexion']);
     }
 
     match /membres/{uid} {
