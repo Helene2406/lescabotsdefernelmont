@@ -27,7 +27,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V70';
+const VERSION_SITE = 'V73';
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
 let currentGroupes = [];
@@ -51,6 +51,17 @@ onAuthStateChanged(auth, async (user) => {
     document.getElementById('versionTag').textContent = VERSION_SITE;
     document.getElementById('fraiseDiscrete')?.remove();
     chargerListeAdminsPourMdp();
+  }
+
+  // 🍓💕 Surprise d'anniversaire — visible UNIQUEMENT sur le compte de
+  // Katia (Admin), du 15 novembre au 21 novembre inclus.
+  if (user.email === identifiantVersEmail('Admin')) {
+    const aujourdhui = new Date();
+    const mois = aujourdhui.getMonth(); // 10 = novembre (0-indexé)
+    const jour = aujourdhui.getDate();
+    if (mois === 10 && jour >= 15 && jour <= 21) {
+      document.getElementById('banniereAnniversaireKatia')?.classList.remove('hidden');
+    }
   }
 
   await chargerGroupes();
@@ -3556,16 +3567,22 @@ function chargerMotsDePasseAdmin() {
     return;
   }
 
-  wrap.innerHTML = tous.map(m => `
+  wrap.innerHTML = tous.map(m => {
+    const derniereConnexionLabel = m.derniereConnexion
+      ? new Date(m.derniereConnexion).toLocaleString('fr-BE', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : 'jamais connecté(e)';
+    return `
     <div class="data-row">
       <div class="data-main">
         <div class="data-title">${escapeHtml(m.nomMaitre || '?')} ${m.estAdminCompte ? '<span class="badge badge-ok">Admin</span>' : ''}</div>
         <div class="data-sub">Identifiant : <strong>${escapeHtml(m.identifiant || '—')}</strong>${m.motDePasseInitial ? ` · Mot de passe : <strong>${escapeHtml(m.motDePasseInitial)}</strong>` : ' · <span class="badge badge-neutral">mot de passe inconnu</span>'}</div>
+        <div class="data-sub">Dernière connexion : ${derniereConnexionLabel}</div>
       </div>
       <div class="data-actions">
         <button class="btn-sm" onclick="window.changerMotDePasseMembre('${m.id}', '${escapeAttr(m.identifiant)}', '${escapeAttr(m.motDePasseInitial||'')}')" ${!m.motDePasseInitial ? 'disabled title="Mot de passe actuel inconnu — impossible de le changer depuis ici tant qu\'il n\'est pas connu (voir Firebase Console pour un compte totalement perdu)."' : ''}>Changer</button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 document.getElementById('rechercheMdp')?.addEventListener('input', () => chargerMotsDePasseAdmin());

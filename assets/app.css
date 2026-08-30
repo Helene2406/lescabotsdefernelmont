@@ -549,3 +549,79 @@
   font-weight: 600;
   text-align: center;
 }
+
+/* 🍓💕 Surprise d'anniversaire de Katia — glamour, doux, un peu pailleté */
+#banniereAnniversaireKatia {
+  margin: 0 0 20px 0;
+}
+.anniv-fond {
+  position: relative;
+  overflow: hidden;
+  border-radius: 20px;
+  padding: 48px 24px;
+  background: linear-gradient(135deg, #FFD6E8 0%, #FFB6D5 30%, #F783AC 65%, #E64980 100%);
+  box-shadow: 0 12px 40px rgba(230, 73, 128, 0.35);
+  text-align: center;
+}
+.anniv-fond::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.55) 1px, transparent 1.5px);
+  background-size: 26px 26px;
+  opacity: 0.5;
+  animation: anniv-scintille 3.5s linear infinite;
+}
+@keyframes anniv-scintille {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.65; }
+}
+.anniv-contenu {
+  position: relative;
+  z-index: 2;
+}
+.anniv-titre {
+  font-family: 'Fraunces', serif;
+  font-weight: 700;
+  font-size: 2.6rem;
+  color: #fff;
+  text-shadow: 0 3px 12px rgba(157, 23, 77, 0.55);
+  letter-spacing: 0.5px;
+}
+.anniv-surnom {
+  font-family: 'Great Vibes', cursive;
+  font-size: 3.2rem;
+  color: #FFF0F6;
+  margin-top: 4px;
+  text-shadow: 0 2px 10px rgba(157, 23, 77, 0.5);
+}
+.anniv-message {
+  margin-top: 14px;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(157, 23, 77, 0.5);
+}
+.anniv-ligne-fraises {
+  position: relative;
+  z-index: 2;
+  font-size: 1.6rem;
+  letter-spacing: 14px;
+  opacity: 0.95;
+  filter: drop-shadow(0 2px 6px rgba(157, 23, 77, 0.35));
+  animation: anniv-onde 4s ease-in-out infinite;
+}
+.anniv-fond .anniv-ligne-fraises:first-of-type { margin-bottom: 18px; }
+.anniv-fond .anniv-ligne-fraises:last-of-type { margin-top: 18px; }
+@keyframes anniv-onde {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@media (max-width: 600px) {
+  .anniv-titre { font-size: 1.9rem; }
+  .anniv-surnom { font-size: 2.3rem; }
+  .anniv-message { font-size: 1.15rem; }
+  .anniv-fond { padding: 36px 16px; }
+  .anniv-ligne-fraises { font-size: 1.2rem; letter-spacing: 6px; }
+}
