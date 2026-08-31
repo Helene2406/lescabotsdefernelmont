@@ -21,7 +21,7 @@ function dateISOLocale(d) {
   return `${y}-${m}-${j}`;
 }
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
-const VERSION_SITE = 'V73';
+const VERSION_SITE = 'V76';
 
 const ENTREPRISE_IBAN = 'BE58 7320 5129 6479';
 const ENTREPRISE_BIC = 'CREGBEBB';
@@ -46,6 +46,12 @@ onAuthStateChanged(auth, async (user) => {
   }
   membreUid = user.uid;
   membreData = mDoc.data();
+
+  // Dernière activité : mise à jour à chaque ouverture de page (pas
+  // seulement à la connexion), y compris quand la session était déjà
+  // ouverte depuis avant. Silencieux, sans impact sur rien d'autre.
+  updateDoc(doc(db, 'membres', membreUid), { derniereActivite: new Date().toISOString() }).catch(() => {});
+
   afficherAccueil();
 
   if (membreData.groupeId) {

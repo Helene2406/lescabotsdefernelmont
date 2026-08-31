@@ -18,6 +18,17 @@ import { meteoActuelle, meteoPour, alerteMeteo, iconeCode } from "./meteo.js";
 
 const JOURS = ["dimanche","lundi","mardi","mercredi","jeudi","vendredi","samedi"];
 
+// Identifiants et mots de passe : caractères spéciaux interdits (lettres,
+// chiffres, point/tiret/underscore pour l'identifiant uniquement). Empêche
+// notamment une apostrophe de casser les boutons générés dynamiquement
+// dans l'interface (leur code intègre l'identifiant/mot de passe tel quel).
+const REGEX_IDENTIFIANT = /^[a-zA-Z0-9._-]+$/;
+const REGEX_MOT_DE_PASSE = /^[a-zA-Z0-9]+$/;
+function identifiantValide(valeur) { return REGEX_IDENTIFIANT.test(valeur || ''); }
+function motDePasseValide(valeur) { return REGEX_MOT_DE_PASSE.test(valeur || ''); }
+const MESSAGE_IDENTIFIANT_INVALIDE = "L'identifiant ne peut contenir que des lettres, chiffres, points, tirets ou underscores (pas d'espace, d'accent, ni d'autre caractère spécial).";
+const MESSAGE_MDP_INVALIDE = "Le mot de passe ne peut contenir que des lettres et des chiffres (pas de caractère spécial, espace ou accent).";
+
 // IMPORTANT : ne jamais utiliser Date.toISOString() pour obtenir la date du
 // jour — ça convertit en UTC et décale d'un jour selon l'heure (surtout le
 // soir en Belgique, UTC+2 l'été). Cette fonction reste sur l'heure locale.
@@ -27,7 +38,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V73';
+const VERSION_SITE = 'V76';
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
 let currentGroupes = [];
@@ -42,6 +53,10 @@ onAuthStateChanged(auth, async (user) => {
     return;
   }
   document.getElementById('adminNom').textContent = mDoc.data().nomMaitre || 'Katia';
+
+  // Dernière activité : mise à jour à chaque ouverture de page admin,
+  // même quand la session était déjà ouverte depuis avant.
+  updateDoc(doc(db, 'membres', user.uid), { derniereActivite: new Date().toISOString() }).catch(() => {});
 
   // Onglet "Mots de passe" + numéro de version : réservés exclusivement à
   // Hélène. La fraise 🍓 reste réservée à Katia (Admin) uniquement — donc
@@ -438,6 +453,14 @@ function ouvrirModalImportMembres() {
         erreurs.push(`Ligne ignorée (identifiant/mot de passe invalide, 6 caractères min.) : "${ligne}"`);
         continue;
       }
+      if (!identifiantValide(identifiantBrut)) {
+        erreurs.push(`Ligne ignorée (identifiant avec caractère(s) spécial(aux) non autorisé(s)) : "${ligne}"`);
+        continue;
+      }
+      if (!motDePasseValide(mdp)) {
+        erreurs.push(`Ligne ignorée (mot de passe avec caractère(s) spécial(aux) non autorisé(s)) : "${ligne}"`);
+        continue;
+      }
       const identifiant = identifiantBrut.charAt(0).toUpperCase() + identifiantBrut.slice(1);
       const groupe = nomGroupe ? currentGroupes.find(g => g.nom.toLowerCase() === nomGroupe.toLowerCase()) : null;
 
@@ -694,6 +717,8 @@ function ouvrirModalMembre(membre) {
         alert('Identifiant et mot de passe (6 caractères min.) obligatoires.');
         return;
       }
+      if (!identifiantValide(identifiant)) { alert(MESSAGE_IDENTIFIANT_INVALIDE); return; }
+      if (!motDePasseValide(mdp)) { alert(MESSAGE_MDP_INVALIDE); return; }
       identifiant = identifiant.charAt(0).toUpperCase() + identifiant.slice(1);
       const email = identifiantVersEmail(identifiant);
 
@@ -1060,6 +1085,17 @@ async function chargerCeSoir() {
 
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
+window.marquerPresenceManuelle = async (groupeId, dateISO, uid, statut) => {
+  await setDoc(doc(db, 'presences', `${groupeId}_${dateISO}_${uid}`), {
+    groupeId, uid, dateISO, statut,
+    repondu: new Date().toISOString(),
+    compteAbonnement: false,
+    marqueParAdmin: true
+  });
+  await traiterAbsencesAutomatiques(); // décompte l'abonnement immédiatement, comme pour une réponse normale
+  window.voirMembresCours(groupeId, dateISO); // rafraîchit la fenêtre avec le nouveau statut
+};
+
 window.voirMembresCours = async (groupeId, dateISO) => {
   const groupe = currentGroupes.find(g => g.id === groupeId);
   const membresDuGroupe = currentMembres.filter(m => m.groupeId === groupeId);
@@ -1083,6 +1119,10 @@ window.voirMembresCours = async (groupeId, dateISO) => {
           <div class="data-title">${escapeHtml(m.nomMaitre)}${nomsChiensActifs(m) ? ' — ' + escapeHtml(nomsChiensActifs(m)) : ''}</div>
           <div class="data-sub">${badge}</div>
         </div>
+        <div class="data-actions">
+          <button class="btn-sm primary" onclick="window.marquerPresenceManuelle('${groupeId}','${dateISO}','${m.id}','present')">✅ Présent</button>
+          <button class="btn-sm danger" onclick="window.marquerPresenceManuelle('${groupeId}','${dateISO}','${m.id}','absent-auto')">Absent (décompté)</button>
+        </div>
       </div>`;
   }).join('');
 
@@ -1090,6 +1130,7 @@ window.voirMembresCours = async (groupeId, dateISO) => {
     <div class="modal-overlay" id="modalOverlay">
       <div class="modal-box">
         <h3>${escapeHtml(groupe?.nom || '')} — ${capitalize(dateLabel)}</h3>
+        <p style="color:var(--slate); font-size:0.85rem;">Utile si un membre n'a pas accès au site (ou n'a pas répondu) mais était bien présent au cours — tu peux corriger son statut ici directement, à tout moment.</p>
         <div class="data-list">
           ${lignes || '<div class="empty-state">Aucun membre dans ce groupe.</div>'}
         </div>
@@ -3454,6 +3495,7 @@ document.getElementById('btnMonCompte').addEventListener('click', () => {
 
     if (!actuel || !nouveau) { statutEl.textContent = 'Merci de remplir tous les champs.'; return; }
     if (nouveau.length < 6) { statutEl.textContent = 'Le nouveau mot de passe doit faire au moins 6 caractères.'; return; }
+    if (!motDePasseValide(nouveau)) { statutEl.textContent = MESSAGE_MDP_INVALIDE; return; }
     if (nouveau !== confirme) { statutEl.textContent = 'La confirmation ne correspond pas.'; return; }
 
     statutEl.textContent = 'Changement en cours...';
@@ -3496,6 +3538,7 @@ window.changerMotDePasseMembre = (membreId, identifiant, motDePasseActuel) => {
     const statutEl = document.getElementById('mdpm-statut');
     const nouveau = document.getElementById('mdpm-nouveau').value;
     if (!nouveau || nouveau.length < 6) { statutEl.textContent = 'Le nouveau mot de passe doit faire au moins 6 caractères.'; return; }
+    if (!motDePasseValide(nouveau)) { statutEl.textContent = MESSAGE_MDP_INVALIDE; return; }
 
     statutEl.textContent = 'Changement en cours...';
     const email = identifiantVersEmail(identifiant);
@@ -3571,12 +3614,16 @@ function chargerMotsDePasseAdmin() {
     const derniereConnexionLabel = m.derniereConnexion
       ? new Date(m.derniereConnexion).toLocaleString('fr-BE', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
       : 'jamais connecté(e)';
+    const derniereActiviteLabel = m.derniereActivite
+      ? new Date(m.derniereActivite).toLocaleString('fr-BE', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : 'aucune activité connue';
     return `
     <div class="data-row">
       <div class="data-main">
         <div class="data-title">${escapeHtml(m.nomMaitre || '?')} ${m.estAdminCompte ? '<span class="badge badge-ok">Admin</span>' : ''}</div>
         <div class="data-sub">Identifiant : <strong>${escapeHtml(m.identifiant || '—')}</strong>${m.motDePasseInitial ? ` · Mot de passe : <strong>${escapeHtml(m.motDePasseInitial)}</strong>` : ' · <span class="badge badge-neutral">mot de passe inconnu</span>'}</div>
-        <div class="data-sub">Dernière connexion : ${derniereConnexionLabel}</div>
+        <div class="data-sub">Dernière connexion (avec mot de passe tapé) : ${derniereConnexionLabel}</div>
+        <div class="data-sub">Dernière activité sur le site (session déjà ouverte incluse) : ${derniereActiviteLabel}</div>
       </div>
       <div class="data-actions">
         <button class="btn-sm" onclick="window.changerMotDePasseMembre('${m.id}', '${escapeAttr(m.identifiant)}', '${escapeAttr(m.motDePasseInitial||'')}')" ${!m.motDePasseInitial ? 'disabled title="Mot de passe actuel inconnu — impossible de le changer depuis ici tant qu\'il n\'est pas connu (voir Firebase Console pour un compte totalement perdu)."' : ''}>Changer</button>
