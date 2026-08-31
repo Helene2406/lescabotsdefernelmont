@@ -21,7 +21,7 @@ function dateISOLocale(d) {
   return `${y}-${m}-${j}`;
 }
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
-const VERSION_SITE = 'V76';
+const VERSION_SITE = 'V77';
 
 const ENTREPRISE_IBAN = 'BE58 7320 5129 6479';
 const ENTREPRISE_BIC = 'CREGBEBB';

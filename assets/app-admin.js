@@ -38,7 +38,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V76';
+const VERSION_SITE = 'V77';
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
 let currentGroupes = [];
@@ -1085,17 +1085,6 @@ async function chargerCeSoir() {
 
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
-window.marquerPresenceManuelle = async (groupeId, dateISO, uid, statut) => {
-  await setDoc(doc(db, 'presences', `${groupeId}_${dateISO}_${uid}`), {
-    groupeId, uid, dateISO, statut,
-    repondu: new Date().toISOString(),
-    compteAbonnement: false,
-    marqueParAdmin: true
-  });
-  await traiterAbsencesAutomatiques(); // décompte l'abonnement immédiatement, comme pour une réponse normale
-  window.voirMembresCours(groupeId, dateISO); // rafraîchit la fenêtre avec le nouveau statut
-};
-
 window.voirMembresCours = async (groupeId, dateISO) => {
   const groupe = currentGroupes.find(g => g.id === groupeId);
   const membresDuGroupe = currentMembres.filter(m => m.groupeId === groupeId);
@@ -1119,10 +1108,6 @@ window.voirMembresCours = async (groupeId, dateISO) => {
           <div class="data-title">${escapeHtml(m.nomMaitre)}${nomsChiensActifs(m) ? ' — ' + escapeHtml(nomsChiensActifs(m)) : ''}</div>
           <div class="data-sub">${badge}</div>
         </div>
-        <div class="data-actions">
-          <button class="btn-sm primary" onclick="window.marquerPresenceManuelle('${groupeId}','${dateISO}','${m.id}','present')">✅ Présent</button>
-          <button class="btn-sm danger" onclick="window.marquerPresenceManuelle('${groupeId}','${dateISO}','${m.id}','absent-auto')">Absent (décompté)</button>
-        </div>
       </div>`;
   }).join('');
 
@@ -1130,7 +1115,7 @@ window.voirMembresCours = async (groupeId, dateISO) => {
     <div class="modal-overlay" id="modalOverlay">
       <div class="modal-box">
         <h3>${escapeHtml(groupe?.nom || '')} — ${capitalize(dateLabel)}</h3>
-        <p style="color:var(--slate); font-size:0.85rem;">Utile si un membre n'a pas accès au site (ou n'a pas répondu) mais était bien présent au cours — tu peux corriger son statut ici directement, à tout moment.</p>
+        <p style="color:var(--slate); font-size:0.85rem;">Seul le membre gère sa présence ou son absence depuis son espace. Sans réponse de sa part, il est automatiquement considéré absent 24h avant le cours.</p>
         <div class="data-list">
           ${lignes || '<div class="empty-state">Aucun membre dans ce groupe.</div>'}
         </div>
