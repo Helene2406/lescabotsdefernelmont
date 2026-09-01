@@ -110,6 +110,7 @@
       </div>
       </div>
 
+      <div class="mp-groupeCours">
       <h3 class="bloc-titre replie" style="margin-top:18px;">Conducteur du chien <span style="font-weight:400; color:var(--slate);">(si différent de vous)</span> <span class="bloc-fleche">▾</span></h3>
       <div class="bloc-contenu replie">
       <div class="form-grid">
@@ -118,13 +119,16 @@
       </div>
       <div class="field"><label>E-mail</label><input type="email" id="mp-conducteurEmail"></div>
       </div>
+      </div>
 
+      <div class="mp-groupeCours">
       <h3 class="bloc-titre replie" style="margin-top:18px;">Assurance RC familiale <span class="bloc-fleche">▾</span></h3>
       <div class="bloc-contenu replie">
       <div class="form-grid">
         <div class="field"><label>Compagnie</label><input id="mp-rcCompagnie"></div>
         <div class="field"><label>N° de police</label><input id="mp-rcNumero"></div>
         <div class="field"><label>Échéance (mois/année)</label><input type="month" id="mp-rcEcheance"></div>
+      </div>
       </div>
       </div>
 
@@ -312,7 +316,7 @@
 
   <!-- ==================== HISTORIQUE ==================== -->
   <div id="panel-historique" class="tab-panel hidden">
-    <div class="app-panel">
+    <div class="app-panel" id="panelHistoriquePresencesWrap">
       <h2>Historique de mes présences</h2>
       <p style="color:var(--slate); font-size:0.85rem; margin-bottom:14px;">Les cours marqués "non répondu" ont été comptabilisés dans votre abonnement.</p>
       <div class="data-list" id="zonePresences"><div class="empty-state">...</div></div>

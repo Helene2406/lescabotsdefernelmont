@@ -1,3 +1,4 @@
+// Projet Firebase : cabots-de-fernelmont-901ee — Site "Les Cabots de Fernelmont" — V83
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
