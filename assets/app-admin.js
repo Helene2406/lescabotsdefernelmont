@@ -38,7 +38,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V82';
+const VERSION_SITE = 'V84';
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
 let currentGroupes = [];
@@ -381,17 +381,28 @@ function renderMembres() {
   }
   wrap.innerHTML = membresAffiches.map(m => {
     const groupe = currentGroupes.find(g => g.id === m.groupeId);
-    const badgeAbo = m.abonnementPaye
+    // Migration en douceur : tant que le bouton de migration n'a pas été
+    // cliqué, un membre existant sans champ accesCours/accesBoutique est
+    // considéré comme y ayant accès (comportement historique).
+    const aAccesCours = m.accesCours !== undefined ? !!m.accesCours : true;
+    const aAccesBoutique = m.accesBoutique !== undefined ? !!m.accesBoutique : true;
+    const chips = [
+      aAccesCours ? '<span class="badge" style="background:#EAF2EC; color:#2F6B4F;">Cours</span>' : '',
+      m.accesDogSitting ? '<span class="badge" style="background:#EFF3F6; color:var(--navy-dark);">Dog Sitting</span>' : '',
+      aAccesBoutique ? '<span class="badge" style="background:#FBEFDA; color:#8A5A17;">Boutique</span>' : ''
+    ].filter(Boolean).join(' ');
+    const badgeAbo = !aAccesCours ? '' : (m.abonnementPaye
       ? `<span class="badge badge-ok">${m.coursRestants ?? 0} cours restants</span>`
-      : `<span class="badge badge-danger">Abonnement non payé</span>`;
-    const badgeCotis = m.cotisationPayee
+      : `<span class="badge badge-danger">Abonnement non payé</span>`);
+    const badgeCotis = !aAccesCours ? '' : (m.cotisationPayee
       ? `<span class="badge badge-ok">Cotisation à jour</span>`
-      : `<span class="badge badge-warn">Cotisation à régler</span>`;
+      : `<span class="badge badge-warn">Cotisation à régler</span>`);
     return `
     <div class="data-row">
       <div class="data-main">
         <div class="data-title">${escapeHtml(m.nomMaitre)}${nomsChiensActifs(m) ? ' — ' + escapeHtml(nomsChiensActifs(m)) : ''}</div>
-        <div class="data-sub">${groupe ? escapeHtml(groupe.nom) : 'Sans groupe'} · ${badgeAbo} ${badgeCotis}</div>
+        <div class="data-sub">${chips}</div>
+        <div class="data-sub">${aAccesCours ? (groupe ? escapeHtml(groupe.nom) : 'Sans groupe') + ' · ' : ''}${badgeAbo} ${badgeCotis}</div>
         <div class="data-sub">${m.gsm ? `<a href="tel:${escapeAttr(m.gsm)}">${escapeHtml(m.gsm)}</a>` : ''} ${m.email ? `· <a href="mailto:${escapeAttr(m.email)}">${escapeHtml(m.email)}</a>` : ''}</div>
         <div class="data-sub">Identifiant : <strong>${escapeHtml(m.identifiant || '—')}</strong>${m.motDePasseInitial ? ` · Mot de passe : <strong>${escapeHtml(m.motDePasseInitial)}</strong>` : ''}</div>
       </div>
@@ -477,6 +488,7 @@ function ouvrirModalImportMembres() {
           nomMaitre, identifiant, motDePasseInitial: mdp, role: 'membre', archive: false,
           gsm: '', dateAnniversaire: '',
           chiens: [],
+          accesCours: true, accesDogSitting: false, accesBoutique: false,
           groupeId: groupe ? groupe.id : null,
           coursRestants: 11, abonnementPaye: false, cotisationPayee: false,
           dateInscription: serverTimestamp()
@@ -547,6 +559,14 @@ function ouvrirModalMembre(membre) {
   const isEdit = !!membre;
   const rc = membre?.assuranceRC || {};
   const chiens = (membre?.chiens || []).filter(c => !c.archive);
+  // Accès : nouveaux champs (accesCours/accesBoutique). Pour un membre déjà
+  // existant qui n'a pas encore reçu la migration (undefined), on part du
+  // principe qu'il a accès (comportement historique) — jamais l'inverse,
+  // pour ne perdre aucun accès par accident tant que le bouton de migration
+  // n'a pas été cliqué. Pour un nouveau membre : décoché par défaut.
+  const accesCoursDefaut = isEdit ? (membre.accesCours !== undefined ? !!membre.accesCours : true) : false;
+  const accesDogSittingDefaut = isEdit ? !!membre.accesDogSitting : false;
+  const accesBoutiqueDefaut = isEdit ? (membre.accesBoutique !== undefined ? !!membre.accesBoutique : true) : false;
   const html = `
     <div class="modal-overlay" id="modalOverlay">
       <div class="modal-box" style="max-width:560px;">
@@ -561,6 +581,14 @@ function ouvrirModalMembre(membre) {
           <div class="field"><label>Mot de passe (pour référence)</label><input id="mm-mdpRef" value="${escapeAttr(membre.motDePasseInitial||'')}" placeholder="renseigne-le si tu le connais"></div>
         </div>
         <button class="btn-sm" type="button" id="mm-btnChangerMdp" style="margin-bottom:10px;">🔑 Changer réellement le mot de passe de connexion</button>`}
+
+        <h3 style="margin-top:18px;">Accès</h3>
+        <p style="font-size:0.85rem; color:var(--slate); margin-bottom:6px;">Détermine les champs ci-dessous et les onglets visibles côté espace membre.</p>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:6px;">
+          <label class="membre-check-row" style="flex:1; min-width:120px; border:1px solid #E3E7EB;"><input type="checkbox" id="mm-accesCours" ${accesCoursDefaut ? 'checked' : ''}><span>Cours</span></label>
+          <label class="membre-check-row" style="flex:1; min-width:120px; border:1px solid #E3E7EB;"><input type="checkbox" id="mm-accesDogSitting" ${accesDogSittingDefaut ? 'checked' : ''}><span>Dog Sitting</span></label>
+          <label class="membre-check-row" style="flex:1; min-width:120px; border:1px solid #E3E7EB;"><input type="checkbox" id="mm-accesBoutique" ${accesBoutiqueDefaut ? 'checked' : ''}><span>Boutique</span></label>
+        </div>
 
         <h3 class="bloc-titre" style="margin-top:18px;">Coordonnées <span class="bloc-fleche">▾</span></h3>
         <div class="bloc-contenu">
@@ -587,6 +615,7 @@ function ouvrirModalMembre(membre) {
         </div>
         </div>
 
+        <div class="mm-groupeCours">
         <h3 class="bloc-titre replie" style="margin-top:18px;">Conducteur du chien (si différent du propriétaire) <span class="bloc-fleche">▾</span></h3>
         <div class="bloc-contenu replie">
         <div class="form-grid">
@@ -595,13 +624,16 @@ function ouvrirModalMembre(membre) {
         </div>
         <div class="field"><label>E-mail</label><input type="email" id="mm-conducteurEmail" value="${isEdit ? escapeAttr(membre.conducteurEmail||'') : ''}"></div>
         </div>
+        </div>
 
+        <div class="mm-groupeCours">
         <h3 class="bloc-titre replie" style="margin-top:18px;">Assurance RC familiale <span class="bloc-fleche">▾</span></h3>
         <div class="bloc-contenu replie">
         <div class="form-grid">
           <div class="field"><label>Compagnie</label><input id="mm-rcCompagnie" value="${escapeAttr(rc.compagnie||'')}"></div>
           <div class="field"><label>N° de police</label><input id="mm-rcNumero" value="${escapeAttr(rc.numeroPolice||'')}"></div>
           <div class="field"><label>Échéance (mois/année)</label><input type="month" id="mm-rcEcheance" value="${rc.dateEcheance||''}"></div>
+        </div>
         </div>
         </div>
 
@@ -613,33 +645,23 @@ function ouvrirModalMembre(membre) {
         ${isEdit ? `<button class="btn-sm" type="button" onclick="window.ouvrirModalChien('${membre.id}', null)">+ Ajouter un chien</button>` : ''}
         </div>
 
-        <h3 class="bloc-titre replie" style="margin-top:18px;">Dog Sitting <span class="bloc-fleche">▾</span></h3>
-        <div class="bloc-contenu replie">
-        <div class="field"><label>Accès à l'option Dog Sitting</label>
-          <select id="mm-accesDogSitting">
-            <option value="non" ${!isEdit || !membre?.accesDogSitting ? 'selected' : ''}>Non</option>
-            <option value="oui" ${isEdit && membre?.accesDogSitting ? 'selected' : ''}>Oui</option>
-          </select>
-        </div>
-        </div>
-
+        <div class="mm-groupeCours">
         <h3 class="bloc-titre" style="margin-top:18px;">Groupe &amp; abonnement <span class="bloc-fleche">▾</span></h3>
         <div class="bloc-contenu">
         <div class="field"><label>Groupe par défaut</label><select id="mm-groupe"></select></div>
-        <div id="mm-blocAbonnement">
-          <div class="form-grid">
-            <div class="field"><label>Cours restants (abonnement)</label><input type="number" id="mm-coursRestants" value="${isEdit ? (membre.coursRestants ?? 11) : 11}"></div>
-            <div class="field"><label>Abonnement payé</label>
-              <select id="mm-aboPaye">
-                <option value="oui" ${isEdit && membre.abonnementPaye ? 'selected':''}>Oui</option>
-                <option value="non" ${isEdit && !membre.abonnementPaye ? 'selected':''}>Non</option>
-              </select>
-            </div>
+        <div class="form-grid">
+          <div class="field"><label>Cours restants (abonnement)</label><input type="number" id="mm-coursRestants" value="${isEdit ? (membre.coursRestants ?? 11) : 11}"></div>
+          <div class="field"><label>Abonnement payé</label>
+            <select id="mm-aboPaye">
+              <option value="oui" ${isEdit && membre.abonnementPaye ? 'selected':''}>Oui</option>
+              <option value="non" ${isEdit && !membre.abonnementPaye ? 'selected':''}>Non</option>
+            </select>
           </div>
         </div>
         </div>
+        </div>
 
-        <div id="mm-blocCotisation">
+        <div class="mm-groupeCours">
           <h3 class="bloc-titre" style="margin-top:18px;">Cotisation annuelle du club <span class="bloc-fleche">▾</span></h3>
           <div class="bloc-contenu">
           ${isEdit ? `<button class="btn-sm primary" type="button" id="mm-btnRenouvelerCotisation" style="margin-bottom:10px;">🔄 Renouveler maintenant (+1 an, marque payée)</button>` : ''}
@@ -656,7 +678,6 @@ function ouvrirModalMembre(membre) {
           </div>
         </div>
         <p id="mm-noteRenouvellement" class="hidden" style="font-size:0.85rem; color:var(--slate); font-style:italic;">Date et statut mis à jour ci-dessus — pense à cliquer "Enregistrer" pour valider.</p>
-        <p id="mm-sansGroupeNote" class="hidden" style="font-size:0.85rem; color:var(--slate); font-style:italic;">Aucun groupe sélectionné : ce membre n'a ni abonnement de cours ni cotisation (accès Boutique/Dog Sitting uniquement). Ces champs sont mis à 0 automatiquement.</p>
 
         ${isEdit ? `
         <h3 class="bloc-titre replie" style="margin-top:18px;">Paiements <span class="bloc-fleche">▾</span></h3>
@@ -665,9 +686,11 @@ function ouvrirModalMembre(membre) {
         <div id="mm-historiquePaiements" style="margin-top:10px;"><div class="empty-state">...</div></div>
         </div>
 
+        <div class="mm-groupeCours">
         <h3 class="bloc-titre replie" style="margin-top:18px;">Historique de présence <span class="bloc-fleche">▾</span></h3>
         <div class="bloc-contenu replie">
         <div id="mm-historiquePresences" style="margin-top:10px; max-height:220px; overflow-y:auto;"><div class="empty-state">...</div></div>
+        </div>
         </div>
         ` : ''}
 
@@ -699,14 +722,14 @@ function ouvrirModalMembre(membre) {
     });
   }
 
-  function actualiserVisibiliteAbonnementCotisation() {
-    const aUnGroupe = !!document.getElementById('mm-groupe').value;
-    document.getElementById('mm-blocAbonnement').classList.toggle('hidden', !aUnGroupe);
-    document.getElementById('mm-blocCotisation').classList.toggle('hidden', !aUnGroupe);
-    document.getElementById('mm-sansGroupeNote').classList.toggle('hidden', aUnGroupe);
+  function actualiserVisibiliteParAcces() {
+    const aAccesCours = document.getElementById('mm-accesCours').checked;
+    document.getElementById('modalZone').querySelectorAll('.mm-groupeCours').forEach(bloc => {
+      bloc.classList.toggle('hidden', !aAccesCours);
+    });
   }
-  actualiserVisibiliteAbonnementCotisation();
-  document.getElementById('mm-groupe').addEventListener('change', actualiserVisibiliteAbonnementCotisation);
+  actualiserVisibiliteParAcces();
+  document.getElementById('mm-accesCours').addEventListener('change', actualiserVisibiliteParAcces);
 
   document.getElementById('mm-save').addEventListener('click', async () => {
     const btnSave = document.getElementById('mm-save');
@@ -729,12 +752,14 @@ function ouvrirModalMembre(membre) {
         numeroPolice: document.getElementById('mm-rcNumero').value.trim(),
         dateEcheance: document.getElementById('mm-rcEcheance').value
       },
-      accesDogSitting: document.getElementById('mm-accesDogSitting').value === 'oui',
-      groupeId: document.getElementById('mm-groupe').value || null,
-      coursRestants: document.getElementById('mm-groupe').value ? (parseInt(document.getElementById('mm-coursRestants').value, 10) || 0) : 0,
-      abonnementPaye: document.getElementById('mm-groupe').value ? document.getElementById('mm-aboPaye').value === 'oui' : false,
-      cotisationPayee: document.getElementById('mm-groupe').value ? document.getElementById('mm-cotisPaye').value === 'oui' : false,
-      cotisationDateEcheance: document.getElementById('mm-groupe').value ? document.getElementById('mm-cotisEcheance').value : ''
+      accesCours: document.getElementById('mm-accesCours').checked,
+      accesDogSitting: document.getElementById('mm-accesDogSitting').checked,
+      accesBoutique: document.getElementById('mm-accesBoutique').checked,
+      groupeId: document.getElementById('mm-accesCours').checked ? (document.getElementById('mm-groupe').value || null) : null,
+      coursRestants: document.getElementById('mm-accesCours').checked ? (parseInt(document.getElementById('mm-coursRestants').value, 10) || 0) : 0,
+      abonnementPaye: document.getElementById('mm-accesCours').checked ? document.getElementById('mm-aboPaye').value === 'oui' : false,
+      cotisationPayee: document.getElementById('mm-accesCours').checked ? document.getElementById('mm-cotisPaye').value === 'oui' : false,
+      cotisationDateEcheance: document.getElementById('mm-accesCours').checked ? document.getElementById('mm-cotisEcheance').value : ''
     };
     // Une fois vraiment renouvelée (payée + échéance repoussée d'au moins un
     // mois), on efface l'ancienne réponse du membre pour ne pas ré-afficher
@@ -1992,8 +2017,9 @@ async function chargerCotisationsARenouveler() {
   // Cas 2 : la fiche affiche "Cotisation à jour" (cotisationPayee = true) mais sans
   // date d'échéance renseignée — dans ce cas le cas 1 ne peut jamais se déclencher,
   // donc on prévient qu'il manque la date pour pouvoir un jour relancer ce membre.
+  // (accès Cours requis, indépendamment d'un groupe hebdo précis déjà choisi ou non)
   const concernesSansDate = currentMembres.filter(m =>
-    m.groupeId && m.cotisationPayee && !m.cotisationDateEcheance
+    (m.accesCours !== undefined ? m.accesCours : true) && m.cotisationPayee && !m.cotisationDateEcheance
   );
 
   if (concernesEcheance.length === 0 && concernesSansDate.length === 0) { zone.innerHTML = ''; return; }
@@ -2029,7 +2055,8 @@ async function chargerAbonnementsARenouveler() {
   const zone = document.getElementById('abonnementsARenouveler');
   if (!zone) return;
 
-  const concernes = currentMembres.filter(m => m.groupeId && (m.coursRestants ?? 0) <= 2);
+  // Accès Cours requis, indépendamment d'un groupe hebdo précis déjà choisi ou non.
+  const concernes = currentMembres.filter(m => (m.accesCours !== undefined ? m.accesCours : true) && (m.coursRestants ?? 0) <= 2);
   if (concernes.length === 0) { zone.innerHTML = ''; return; }
 
   const serviceAbonnement = currentServices.find(s => s.nom === 'Cours collectif') || {};
@@ -3661,6 +3688,36 @@ window.changerMotDePasseMembre = (membreId, identifiant, motDePasseActuel) => {
 // self-service de mot de passe n'existe côté membre — la seule façon dont
 // il change est via ce même panneau ou la création du compte).
 // ==========================================================================
+// ==========================================================================
+// MAINTENANCE — migration ponctuelle : activer les 3 accès (Cours/Dog
+// Sitting/Boutique) pour tous les membres déjà existants (chantier refonte
+// membres). Écrase la valeur actuelle de accesCours/accesDogSitting/
+// accesBoutique pour CHAQUE membre (role: 'membre'), y compris archivés —
+// action volontaire à la demande d'Hélène, pas une simple réparation de
+// champ manquant. Sans effet sur les nouveaux membres créés après coup
+// (ceux-ci démarrent avec les 3 accès décochés par défaut).
+// ==========================================================================
+document.getElementById('btnMigrationAcces')?.addEventListener('click', async () => {
+  if (!confirm("Donner l'accès Cours + Dog Sitting + Boutique à TOUS les membres existants (y compris archivés) ? Cette action écrase leurs accès actuels.")) return;
+  const btn = document.getElementById('btnMigrationAcces');
+  const zone = document.getElementById('migrationAccesResultat');
+  btn.disabled = true;
+  zone.textContent = 'Migration en cours...';
+  try {
+    const snap = await getDocs(query(collection(db, 'membres'), where('role', '==', 'membre')));
+    let compte = 0;
+    for (const d of snap.docs) {
+      await updateDoc(doc(db, 'membres', d.id), { accesCours: true, accesDogSitting: true, accesBoutique: true });
+      compte++;
+    }
+    zone.textContent = `Terminé : ${compte} membre(s) mis à jour avec les 3 accès activés.`;
+    chargerMembres();
+  } catch (err) {
+    zone.textContent = 'Erreur pendant la migration : ' + err.message;
+  }
+  btn.disabled = false;
+});
+
 let currentAdminsPourMdp = [];
 
 async function chargerListeAdminsPourMdp() {

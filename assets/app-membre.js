@@ -21,7 +21,7 @@ function dateISOLocale(d) {
   return `${y}-${m}-${j}`;
 }
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
-const VERSION_SITE = 'V82';
+const VERSION_SITE = 'V84';
 
 const ENTREPRISE_IBAN = 'BE58 7320 5129 6479';
 const ENTREPRISE_BIC = 'CREGBEBB';
@@ -47,24 +47,42 @@ onAuthStateChanged(auth, async (user) => {
   // ouverte depuis avant. Silencieux, sans impact sur rien d'autre.
   updateDoc(doc(db, 'membres', membreUid), { derniereActivite: new Date().toISOString() }).catch(() => {});
 
+  // Chantier refonte membres : accès Cours / Dog Sitting / Boutique
+  // indépendants. Un membre déjà existant sans champ accesCours/accesBoutique
+  // (pas encore touché par la migration) est considéré y avoir accès par
+  // défaut — même logique de sécurité que côté admin.
+  const aAccesCours = membreData.accesCours !== undefined ? !!membreData.accesCours : true;
+  const aAccesBoutique = membreData.accesBoutique !== undefined ? !!membreData.accesBoutique : true;
+
   if (membreData.archive) {
     // Ancien membre (compte archivé) : accès restreint à la Boutique et,
-    // si autorisé, au Dog Sitting uniquement — tout le reste (cours,
-    // profil, blog, messages, règlement...) reste masqué.
+    // si autorisé, au Dog Sitting uniquement (et seulement si le membre y a
+    // encore droit) — tout le reste (cours, profil, blog, messages,
+    // règlement...) reste masqué.
     document.querySelectorAll('.tab-btn').forEach(btn => {
-      if (btn.dataset.tab !== 'boutique' && btn.dataset.tab !== 'dogsitting') btn.classList.add('hidden');
+      const garder = (btn.dataset.tab === 'boutique' && aAccesBoutique) || (btn.dataset.tab === 'dogsitting' && membreData.accesDogSitting);
+      btn.classList.toggle('hidden', !garder);
       btn.classList.remove('active');
     });
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
-    document.querySelector('.tab-btn[data-tab="boutique"]')?.classList.add('active');
-    document.getElementById('panel-boutique')?.classList.remove('hidden');
+    const premierOnglet = aAccesBoutique ? 'boutique' : (membreData.accesDogSitting ? 'dogsitting' : null);
+    if (premierOnglet) {
+      document.querySelector(`.tab-btn[data-tab="${premierOnglet}"]`)?.classList.add('active');
+      document.getElementById('panel-' + premierOnglet)?.classList.remove('hidden');
+    }
+    if (aAccesBoutique) chargerBoutiqueMembre();
     if (membreData.accesDogSitting) {
       document.getElementById('tabDogSittingBtn')?.classList.remove('hidden');
       chargerDogSittingMembre();
     }
-    chargerBoutiqueMembre();
     return;
   }
+
+  // Onglets/panneaux dont la visibilité dépend du profil d'accès.
+  document.getElementById('tabReglementBtn')?.classList.toggle('hidden', !aAccesCours);
+  document.getElementById('tabBlogBtn')?.classList.toggle('hidden', !aAccesCours);
+  document.getElementById('tabBoutiqueBtn')?.classList.toggle('hidden', !aAccesBoutique);
+  document.getElementById('panelHistoriquePresencesWrap')?.classList.toggle('hidden', !aAccesCours);
 
   afficherAccueil();
 
@@ -76,15 +94,20 @@ onAuthStateChanged(auth, async (user) => {
       await afficherProchainsCours();
     }
   } else {
-    // Membre sans groupe (ex : uniquement Dog Sitting et/ou Boutique) :
-    // les panneaux "Mon groupe", "Mes prochains cours" et "Mon abonnement"
-    // (abonnement de cours + cotisation) n'ont pas de sens ici, on les
-    // masque et on met la Boutique en avant à la place.
+    // Pas (encore) de groupe hebdo précis assigné : les panneaux "Mon
+    // groupe" et "Mes prochains cours" n'ont pas de sens tant qu'aucun
+    // créneau n'est choisi (indépendant de l'accès Cours lui-même, qui peut
+    // déjà être activé — voir "Mon abonnement" juste en dessous).
     document.getElementById('panelGroupeWrap').classList.add('hidden');
     document.getElementById('panelCoursWrap').classList.add('hidden');
-    document.getElementById('panelAbonnementWrap').classList.add('hidden');
+  }
+
+  document.getElementById('panelAbonnementWrap').classList.toggle('hidden', !aAccesCours);
+  if (aAccesBoutique && !aAccesCours) {
     document.getElementById('blocBoutiqueEnAvant').classList.remove('hidden');
     afficherApercuBoutique();
+  } else {
+    document.getElementById('blocBoutiqueEnAvant').classList.add('hidden');
   }
 
   chargerServicesMembre();
@@ -655,6 +678,13 @@ function preremplirMonProfil() {
   document.getElementById('mp-rcCompagnie').value = rc.compagnie || '';
   document.getElementById('mp-rcNumero').value = rc.numeroPolice || '';
   document.getElementById('mp-rcEcheance').value = rc.dateEcheance || '';
+
+  // Champs liés aux cours (conducteur du chien, assurance RC) : masqués si
+  // le membre n'a pas l'accès Cours. Comme côté admin, un membre déjà
+  // existant sans champ accesCours (pas encore migré) est considéré comme y
+  // ayant accès par défaut.
+  const aAccesCours = membreData.accesCours !== undefined ? !!membreData.accesCours : true;
+  document.querySelectorAll('.mp-groupeCours').forEach(bloc => bloc.classList.toggle('hidden', !aAccesCours));
 }
 
 document.getElementById('mp-enregistrer').addEventListener('click', async () => {
