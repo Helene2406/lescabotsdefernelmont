@@ -21,7 +21,7 @@ function dateISOLocale(d) {
   return `${y}-${m}-${j}`;
 }
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
-const VERSION_SITE = 'V81';
+const VERSION_SITE = 'V82';
 
 const ENTREPRISE_IBAN = 'BE58 7320 5129 6479';
 const ENTREPRISE_BIC = 'CREGBEBB';
@@ -40,6 +40,7 @@ onAuthStateChanged(auth, async (user) => {
   }
   membreUid = user.uid;
   membreData = mDoc.data();
+  activerBlocsRepliables();
 
   // Dernière activité : mise à jour à chaque ouverture de page (pas
   // seulement à la connexion), y compris quand la session était déjà
@@ -337,6 +338,22 @@ function escapeHtml(str) {
   if (!str) return '';
   return str.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+// Blocs de fiche repliables : tout <h3 class="bloc-titre"> ouvre/ferme le
+// <div class="bloc-contenu"> qui le suit directement (arrow ▾ / ▸).
+function activerBlocsRepliables(conteneur) {
+  (conteneur || document).querySelectorAll('.bloc-titre').forEach(titre => {
+    if (titre.dataset.repliableInit) return;
+    titre.dataset.repliableInit = '1';
+    const contenu = titre.nextElementSibling;
+    if (!contenu || !contenu.classList.contains('bloc-contenu')) return;
+    titre.addEventListener('click', () => {
+      const seFerme = !contenu.classList.contains('replie');
+      contenu.classList.toggle('replie', seFerme);
+      titre.classList.toggle('replie', seFerme);
+    });
+  });
+}
+
 function texteAvecLiens(str) {
   const echappe = escapeHtml(str);
   return echappe.replace(/(https?:\/\/[^\s<]+)/g, url =>

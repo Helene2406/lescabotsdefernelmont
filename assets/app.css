@@ -218,6 +218,29 @@
 
 .hidden { display: none !important; }
 
+/* Blocs de fiche repliables (fiche membre admin + Mon profil membre) */
+.bloc-titre {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+  gap: 8px;
+}
+.bloc-titre:hover { color: var(--or, #a97c2c); }
+.bloc-fleche {
+  display: inline-block;
+  font-size: 0.75em;
+  color: var(--slate);
+  transition: transform 0.18s ease;
+  flex-shrink: 0;
+}
+.bloc-titre.replie .bloc-fleche { transform: rotate(-90deg); }
+.bloc-contenu {
+  overflow: hidden;
+}
+.bloc-contenu.replie { display: none; }
+
 /* Data list / cards instead of wide tables (mobile-friendly) */
 .data-list { display: flex; flex-direction: column; gap: 10px; }
 

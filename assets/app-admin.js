@@ -38,7 +38,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V81';
+const VERSION_SITE = 'V82';
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
 let currentGroupes = [];
@@ -562,7 +562,8 @@ function ouvrirModalMembre(membre) {
         </div>
         <button class="btn-sm" type="button" id="mm-btnChangerMdp" style="margin-bottom:10px;">🔑 Changer réellement le mot de passe de connexion</button>`}
 
-        <h3 style="margin-top:18px;">Coordonnées</h3>
+        <h3 class="bloc-titre" style="margin-top:18px;">Coordonnées <span class="bloc-fleche">▾</span></h3>
+        <div class="bloc-contenu">
         <div class="field"><label>Nom du maître</label><input id="mm-nomMaitre" value="${isEdit ? escapeAttr(membre.nomMaitre) : ''}"></div>
         <div class="form-grid">
           <div class="field"><label>GSM</label><input id="mm-gsm" value="${isEdit ? escapeAttr(membre.gsm||'') : ''}" placeholder="ex: 0032 4XX XX XX XX"></div>
@@ -584,36 +585,46 @@ function ouvrirModalMembre(membre) {
           </div>
           <div class="field"><label>Précision</label><input id="mm-trouveViaDetail" value="${isEdit ? escapeAttr(membre.trouveViaDetail||'') : ''}"></div>
         </div>
+        </div>
 
-        <h3 style="margin-top:18px;">Conducteur du chien (si différent du propriétaire)</h3>
+        <h3 class="bloc-titre replie" style="margin-top:18px;">Conducteur du chien (si différent du propriétaire) <span class="bloc-fleche">▾</span></h3>
+        <div class="bloc-contenu replie">
         <div class="form-grid">
           <div class="field"><label>Nom Prénom</label><input id="mm-conducteurNom" value="${isEdit ? escapeAttr(membre.conducteurNom||'') : ''}"></div>
           <div class="field"><label>GSM</label><input id="mm-conducteurGsm" value="${isEdit ? escapeAttr(membre.conducteurGsm||'') : ''}"></div>
         </div>
         <div class="field"><label>E-mail</label><input type="email" id="mm-conducteurEmail" value="${isEdit ? escapeAttr(membre.conducteurEmail||'') : ''}"></div>
+        </div>
 
-        <h3 style="margin-top:18px;">Assurance RC familiale</h3>
+        <h3 class="bloc-titre replie" style="margin-top:18px;">Assurance RC familiale <span class="bloc-fleche">▾</span></h3>
+        <div class="bloc-contenu replie">
         <div class="form-grid">
           <div class="field"><label>Compagnie</label><input id="mm-rcCompagnie" value="${escapeAttr(rc.compagnie||'')}"></div>
           <div class="field"><label>N° de police</label><input id="mm-rcNumero" value="${escapeAttr(rc.numeroPolice||'')}"></div>
           <div class="field"><label>Échéance (mois/année)</label><input type="month" id="mm-rcEcheance" value="${rc.dateEcheance||''}"></div>
         </div>
+        </div>
 
-        <h3 style="margin-top:18px;">Chien(s)</h3>
+        <h3 class="bloc-titre" style="margin-top:18px;">Chien(s) <span class="bloc-fleche">▾</span></h3>
+        <div class="bloc-contenu">
         <div id="mm-listeChiens">
           ${isEdit ? renderListeChiensAdmin(membre) : '<p style="color:var(--slate); font-size:0.85rem;">Enregistre d\'abord le membre, tu pourras ajouter son/ses chien(s) juste après.</p>'}
         </div>
         ${isEdit ? `<button class="btn-sm" type="button" onclick="window.ouvrirModalChien('${membre.id}', null)">+ Ajouter un chien</button>` : ''}
+        </div>
 
-        <h3 style="margin-top:18px;">Dog Sitting</h3>
+        <h3 class="bloc-titre replie" style="margin-top:18px;">Dog Sitting <span class="bloc-fleche">▾</span></h3>
+        <div class="bloc-contenu replie">
         <div class="field"><label>Accès à l'option Dog Sitting</label>
           <select id="mm-accesDogSitting">
             <option value="non" ${!isEdit || !membre?.accesDogSitting ? 'selected' : ''}>Non</option>
             <option value="oui" ${isEdit && membre?.accesDogSitting ? 'selected' : ''}>Oui</option>
           </select>
         </div>
+        </div>
 
-        <h3 style="margin-top:18px;">Groupe &amp; abonnement</h3>
+        <h3 class="bloc-titre" style="margin-top:18px;">Groupe &amp; abonnement <span class="bloc-fleche">▾</span></h3>
+        <div class="bloc-contenu">
         <div class="field"><label>Groupe par défaut</label><select id="mm-groupe"></select></div>
         <div id="mm-blocAbonnement">
           <div class="form-grid">
@@ -626,9 +637,11 @@ function ouvrirModalMembre(membre) {
             </div>
           </div>
         </div>
+        </div>
 
         <div id="mm-blocCotisation">
-          <h3 style="margin-top:18px;">Cotisation annuelle du club</h3>
+          <h3 class="bloc-titre" style="margin-top:18px;">Cotisation annuelle du club <span class="bloc-fleche">▾</span></h3>
+          <div class="bloc-contenu">
           ${isEdit ? `<button class="btn-sm primary" type="button" id="mm-btnRenouvelerCotisation" style="margin-bottom:10px;">🔄 Renouveler maintenant (+1 an, marque payée)</button>` : ''}
           <div class="form-grid">
             <div class="field"><label>Date d'échéance</label><input type="date" id="mm-cotisEcheance" value="${membre?.cotisationDateEcheance||''}"></div>
@@ -640,17 +653,22 @@ function ouvrirModalMembre(membre) {
             </div>
           </div>
           ${isEdit && membre.cotisationRenouvellement ? `<p style="font-size:0.85rem; color:var(--slate);">Réponse du membre au renouvellement : <strong>${membre.cotisationRenouvellement === 'oui' ? 'Oui, elle/il souhaite renouveler' : 'Non, elle/il ne souhaite pas renouveler'}</strong></p>` : ''}
+          </div>
         </div>
         <p id="mm-noteRenouvellement" class="hidden" style="font-size:0.85rem; color:var(--slate); font-style:italic;">Date et statut mis à jour ci-dessus — pense à cliquer "Enregistrer" pour valider.</p>
         <p id="mm-sansGroupeNote" class="hidden" style="font-size:0.85rem; color:var(--slate); font-style:italic;">Aucun groupe sélectionné : ce membre n'a ni abonnement de cours ni cotisation (accès Boutique/Dog Sitting uniquement). Ces champs sont mis à 0 automatiquement.</p>
 
         ${isEdit ? `
-        <h3 style="margin-top:18px;">Paiements</h3>
+        <h3 class="bloc-titre replie" style="margin-top:18px;">Paiements <span class="bloc-fleche">▾</span></h3>
+        <div class="bloc-contenu replie">
         <button class="btn-sm" type="button" onclick="window.ouvrirModalPaiement('${membre.id}')">+ Enregistrer un paiement</button>
         <div id="mm-historiquePaiements" style="margin-top:10px;"><div class="empty-state">...</div></div>
+        </div>
 
-        <h3 style="margin-top:18px;">Historique de présence</h3>
+        <h3 class="bloc-titre replie" style="margin-top:18px;">Historique de présence <span class="bloc-fleche">▾</span></h3>
+        <div class="bloc-contenu replie">
         <div id="mm-historiquePresences" style="margin-top:10px; max-height:220px; overflow-y:auto;"><div class="empty-state">...</div></div>
+        </div>
         ` : ''}
 
         <div class="modal-actions">
@@ -660,6 +678,7 @@ function ouvrirModalMembre(membre) {
       </div>
     </div>`;
   document.getElementById('modalZone').innerHTML = html;
+  activerBlocsRepliables(document.getElementById('modalZone'));
   remplirSelectGroupes();
   if (isEdit && membre.groupeId) document.getElementById('mm-groupe').value = membre.groupeId;
   if (isEdit) { chargerHistoriquePaiements(membre.id); chargerHistoriquePresencesAdmin(membre.id); }
@@ -1228,6 +1247,24 @@ function escapeHtml(str) {
   return str.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function escapeAttr(str) { return escapeHtml(str); }
+
+// Blocs de fiche repliables : tout <h3 class="bloc-titre"> ouvre/ferme le
+// <div class="bloc-contenu"> qui le suit directement (arrow ▾ / ▸). Fonction
+// générique appelée après le rendu HTML concerné (ex: à l'ouverture de la
+// fiche membre) — sans effet si aucun bloc-titre n'est présent dans conteneur.
+function activerBlocsRepliables(conteneur) {
+  (conteneur || document).querySelectorAll('.bloc-titre').forEach(titre => {
+    if (titre.dataset.repliableInit) return;
+    titre.dataset.repliableInit = '1';
+    const contenu = titre.nextElementSibling;
+    if (!contenu || !contenu.classList.contains('bloc-contenu')) return;
+    titre.addEventListener('click', () => {
+      const seFerme = !contenu.classList.contains('replie');
+      contenu.classList.toggle('replie', seFerme);
+      titre.classList.toggle('replie', seFerme);
+    });
+  });
+}
 
 // Échappe le texte puis transforme les liens http(s)://... tapés dedans en
 // vrais liens cliquables (ouverture dans un nouvel onglet).
@@ -1944,18 +1981,29 @@ async function chargerCotisationsARenouveler() {
   const aujourdhui = new Date(); aujourdhui.setHours(0,0,0,0);
   const dans30Jours = new Date(aujourdhui); dans30Jours.setDate(aujourdhui.getDate() + 30);
 
-  const concernes = currentMembres.filter(m => {
+  // Cas 1 : une date d'échéance est renseignée et elle approche (ou est déjà dépassée) —
+  // peu importe le statut payé/non payé.
+  const concernesEcheance = currentMembres.filter(m => {
     if (!m.cotisationDateEcheance) return false;
     const echeance = new Date(m.cotisationDateEcheance + 'T00:00:00');
     return echeance <= dans30Jours;
   });
 
-  if (concernes.length === 0) { zone.innerHTML = ''; return; }
+  // Cas 2 : la fiche affiche "Cotisation à jour" (cotisationPayee = true) mais sans
+  // date d'échéance renseignée — dans ce cas le cas 1 ne peut jamais se déclencher,
+  // donc on prévient qu'il manque la date pour pouvoir un jour relancer ce membre.
+  const concernesSansDate = currentMembres.filter(m =>
+    m.groupeId && m.cotisationPayee && !m.cotisationDateEcheance
+  );
 
-  zone.innerHTML = `
+  if (concernesEcheance.length === 0 && concernesSansDate.length === 0) { zone.innerHTML = ''; return; }
+
+  let html = '';
+  if (concernesEcheance.length > 0) {
+    html += `
     <div class="banner-alert">
-      💳 Cotisation${concernes.length > 1 ? 's' : ''} à renouveler bientôt :<br>
-      ${concernes.map(m => {
+      💳 Cotisation${concernesEcheance.length > 1 ? 's' : ''} à renouveler bientôt :<br>
+      ${concernesEcheance.map(m => {
         const echeance = new Date(m.cotisationDateEcheance + 'T00:00:00');
         const enRetard = echeance < aujourdhui;
         const reponse = m.cotisationRenouvellement === 'oui' ? ' (a dit oui — facture 70€ TTC possible)'
@@ -1963,6 +2011,15 @@ async function chargerCotisationsARenouveler() {
         return `${escapeHtml(m.nomMaitre)}${enRetard ? ' — échue' : ''}${reponse}`;
       }).join('<br>')}
     </div>`;
+  }
+  if (concernesSansDate.length > 0) {
+    html += `
+    <div class="banner-alert" style="background:#FFF7E6; border-color:#F0D9A0;">
+      ⚠️ Cotisation marquée "à jour" mais sans date d'échéance renseignée (impossible de la relancer plus tard tant que la date n'est pas complétée) :<br>
+      ${concernesSansDate.map(m => escapeHtml(m.nomMaitre)).join('<br>')}
+    </div>`;
+  }
+  zone.innerHTML = html;
 }
 
 // ==========================================================================
