@@ -19,6 +19,13 @@ import { db, collection, getDocs } from "./firebase-config.js";
       if (el && d.data().texte) {
         el.textContent = d.data().texte;
       }
+      // Visibilité d'une carte (ex: activite1_visible -> #activite1-carte).
+      // Absent = visible par défaut ; seul un doc explicite {visible:false}
+      // masque la carte.
+      const matchVisible = d.id.match(/^(.+)_visible$/);
+      if (matchVisible && d.data().visible === false) {
+        document.getElementById(`${matchVisible[1]}-carte`)?.style.setProperty('display', 'none');
+      }
     });
   } catch (e) {
     // En cas d'erreur (hors ligne, etc.), on garde simplement le texte par défaut du HTML.

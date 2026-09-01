@@ -38,7 +38,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V84';
+const VERSION_SITE = 'V86';
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
 let currentGroupes = [];
@@ -354,6 +354,13 @@ async function chargerMembres() {
     const m = { id: d.id, ...d.data() };
     if (m.archive) currentMembresArchives.push(m); else currentMembres.push(m);
   });
+  // Classement alphabétique (nom du maître) — se répercute automatiquement
+  // sur toutes les listes qui filtrent/affichent currentMembres ensuite
+  // (membres, archives, membres par groupe, destinataires RDV/messages,
+  // mots de passe...).
+  const parNom = (a, b) => (a.nomMaitre || '').localeCompare(b.nomMaitre || '', 'fr', { sensitivity: 'base' });
+  currentMembres.sort(parNom);
+  currentMembresArchives.sort(parNom);
   renderMembres();
   renderGroupes();
   chargerMotsDePasseAdmin();
@@ -1486,7 +1493,11 @@ async function chargerRdv() {
     const valides = presents.filter(r => r.paiementValide).length;
     const dateLabel = rdv.date ? new Date(rdv.date + 'T00:00:00').toLocaleDateString('fr-BE', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
 
-    const detailPresents = presents.map(r => {
+    const detailPresents = [...presents].sort((a, b) => {
+      const nomA = currentMembres.find(mm => mm.id === a.uid)?.nomMaitre || '';
+      const nomB = currentMembres.find(mm => mm.id === b.uid)?.nomMaitre || '';
+      return nomA.localeCompare(nomB, 'fr', { sensitivity: 'base' });
+    }).map(r => {
       const m = currentMembres.find(mm => mm.id === r.uid);
       return `
       <div class="data-row">
@@ -3338,7 +3349,11 @@ window.voirPrecommandes = async (campagneId) => {
     });
   });
 
-  const detailMembres = precommandes.map(p => {
+  const detailMembres = [...precommandes].sort((a, b) => {
+    const nomA = currentMembres.find(mm => mm.id === a.membreId)?.nomMaitre || '';
+    const nomB = currentMembres.find(mm => mm.id === b.membreId)?.nomMaitre || '';
+    return nomA.localeCompare(nomB, 'fr', { sensitivity: 'base' });
+  }).map(p => {
     const m = currentMembres.find(mm => mm.id === p.membreId);
     const detail = (p.lignes || []).map(l => `${l.quantite} × ${l.nom}`).join(', ');
     return `<div class="data-row"><div class="data-main">
@@ -3411,15 +3426,40 @@ const CHAMPS_CONTENU = [
   ]},
 ];
 
+// Activités pouvant être masquées individuellement de la page publique
+// (checkbox "visible/invisible", indépendante du texte). Doc Firestore
+// contenu_site/activiteN_visible = { visible: bool } — absent = visible.
+const ACTIVITES_VISIBILITE = [
+  { n: 1, nom: 'Obéissance' },
+  { n: 2, nom: 'Socialisation' },
+  { n: 3, nom: 'Agility' },
+  { n: 4, nom: 'Confiance au chien' },
+  { n: 5, nom: 'Rapport chien-maître' },
+];
+
 async function chargerContenuAdmin() {
   const wrap = document.getElementById('zoneContenu');
   if (!wrap) return;
   const snap = await getDocs(collection(db, 'contenu_site'));
   const valeurs = {};
-  snap.forEach(d => { valeurs[d.id] = d.data().texte; });
+  const visibilites = {};
+  snap.forEach(d => {
+    valeurs[d.id] = d.data().texte;
+    if (d.id.endsWith('_visible')) visibilites[d.id] = d.data().visible;
+  });
 
   wrap.innerHTML = CHAMPS_CONTENU.map(section => `
     <h3 style="margin-top:20px;">${escapeHtml(section.page)}</h3>
+    <button class="btn-sm" style="margin-bottom:10px;" onclick="window.reinitialiserContenu('${escapeAttr(section.page)}')">↺ Réinitialiser cette page aux textes par défaut</button>
+    ${section.page === 'Activités' ? `
+    <div style="background:var(--paper-warm); border-radius:6px; padding:10px 14px; margin-bottom:14px;">
+      <p style="font-size:0.85rem; color:var(--slate); margin-bottom:8px;">Décoche une activité pour la masquer entièrement de la page publique "Activités" (le texte reste enregistré, juste caché) :</p>
+      ${ACTIVITES_VISIBILITE.map(a => {
+        const docId = `activite${a.n}_visible`;
+        const visible = visibilites[docId] !== false;
+        return `<label class="membre-check-row" style="display:inline-flex; width:auto; margin:0 10px 6px 0;"><input type="checkbox" ${visible ? 'checked' : ''} onchange="window.sauverVisibiliteActivite(${a.n}, this.checked)"><span>Activité ${a.n} — ${escapeHtml(a.nom)}</span></label>`;
+      }).join('')}
+    </div>` : ''}
     ${section.champs.map(c => `
       <div class="field" style="margin-bottom:14px;">
         <label>${escapeHtml(c.label)}</label>
@@ -3429,6 +3469,25 @@ async function chargerContenuAdmin() {
       </div>`).join('')}
   `).join('');
 }
+
+window.sauverVisibiliteActivite = async (n, visible) => {
+  await setDoc(doc(db, 'contenu_site', `activite${n}_visible`), { visible });
+};
+
+window.reinitialiserContenu = async (page) => {
+  if (!confirm(`Remettre tous les textes de la page "${page}" à leur version par défaut ?`)) return;
+  const section = CHAMPS_CONTENU.find(s => s.page === page);
+  if (!section) return;
+  for (const c of section.champs) {
+    await setDoc(doc(db, 'contenu_site', c.id), { texte: c.defaut });
+  }
+  if (page === 'Activités') {
+    for (const a of ACTIVITES_VISIBILITE) {
+      await setDoc(doc(db, 'contenu_site', `activite${a.n}_visible`), { visible: true });
+    }
+  }
+  chargerContenuAdmin();
+};
 
 window.sauverContenu = async (champId) => {
   const texte = document.getElementById(`ct-${champId}`).value;
