@@ -21,7 +21,7 @@ function dateISOLocale(d) {
   return `${y}-${m}-${j}`;
 }
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
-const VERSION_SITE = 'V77';
+const VERSION_SITE = 'V81';
 
 const ENTREPRISE_IBAN = 'BE58 7320 5129 6479';
 const ENTREPRISE_BIC = 'CREGBEBB';
@@ -38,12 +38,6 @@ onAuthStateChanged(auth, async (user) => {
     window.location.href = 'connexion.html';
     return;
   }
-  if (mDoc.data().archive) {
-    alert('Ce compte a été archivé. Contactez Katia si vous pensez qu\'il s\'agit d\'une erreur.');
-    await signOut(auth);
-    window.location.href = 'connexion.html';
-    return;
-  }
   membreUid = user.uid;
   membreData = mDoc.data();
 
@@ -51,6 +45,25 @@ onAuthStateChanged(auth, async (user) => {
   // seulement à la connexion), y compris quand la session était déjà
   // ouverte depuis avant. Silencieux, sans impact sur rien d'autre.
   updateDoc(doc(db, 'membres', membreUid), { derniereActivite: new Date().toISOString() }).catch(() => {});
+
+  if (membreData.archive) {
+    // Ancien membre (compte archivé) : accès restreint à la Boutique et,
+    // si autorisé, au Dog Sitting uniquement — tout le reste (cours,
+    // profil, blog, messages, règlement...) reste masqué.
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      if (btn.dataset.tab !== 'boutique' && btn.dataset.tab !== 'dogsitting') btn.classList.add('hidden');
+      btn.classList.remove('active');
+    });
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+    document.querySelector('.tab-btn[data-tab="boutique"]')?.classList.add('active');
+    document.getElementById('panel-boutique')?.classList.remove('hidden');
+    if (membreData.accesDogSitting) {
+      document.getElementById('tabDogSittingBtn')?.classList.remove('hidden');
+      chargerDogSittingMembre();
+    }
+    chargerBoutiqueMembre();
+    return;
+  }
 
   afficherAccueil();
 
@@ -250,7 +263,22 @@ async function afficherProchainsCours() {
 
     if (presence) {
       if (presence.statut === 'present') {
-        statutHtml = '<span class="badge badge-ok">Présence confirmée</span>';
+        const heureLimiteAnnul = new Date(heureCours.getTime() - 60 * 60 * 1000); // 1h avant le cours
+        const encoreTemps = new Date() < heureLimiteAnnul;
+
+        if (presence.demandeAnnulationStatut === 'attente') {
+          statutHtml = `<span class="badge badge-warn">Présence confirmée</span><br>
+            <span class="badge badge-neutral" style="margin-top:4px;">Demande d'annulation envoyée — en attente de validation par Katia</span>`;
+        } else if (presence.demandeAnnulationStatut === 'refusee') {
+          statutHtml = `<span class="badge badge-ok">Présence confirmée</span><br>
+            <span style="font-size:0.78rem; color:var(--slate); display:block; margin-top:4px;">Votre demande d'annulation a été refusée par Katia — ce cours compte dans votre abonnement.</span>`;
+        } else if (encoreTemps) {
+          statutHtml = `<span class="badge badge-ok">Présence confirmée</span>
+            <button class="btn-sm" style="margin-top:6px; display:block;" onclick="window.ouvrirDemandeAnnulation('${dateISO}')">Annuler ma présence (avec justificatif)</button>
+            <p style="font-size:0.76rem; color:var(--slate-light); margin-top:4px;">Possible jusqu'à 1h avant le cours. Katia doit valider pour que le cours ne compte pas dans votre abonnement.</p>`;
+        } else {
+          statutHtml = '<span class="badge badge-ok">Présence confirmée</span>';
+        }
       } else if (presence.statut === 'absent-auto') {
         statutHtml = '<span class="badge badge-warn">Pas de réponse dans les délais — comptabilisé(e) absent(e), ce cours compte dans votre abonnement.</span>';
       } else {
@@ -1641,3 +1669,44 @@ function chargerEnqueteAnonyme() {
     }
   });
 }
+
+// ==========================================================================
+// ANNULATION TARDIVE D'UNE PRÉSENCE DÉJÀ VALIDÉE — possible jusqu'à 1h
+// avant le cours, avec justificatif obligatoire. Katia doit valider pour
+// que le cours ne soit pas décompté de l'abonnement.
+// ==========================================================================
+window.ouvrirDemandeAnnulation = (dateISO) => {
+  const html = `
+    <div class="modal-overlay" id="modalOverlayAnnulPresence">
+      <div class="modal-box">
+        <h3>Annuler ma présence</h3>
+        <p style="color:var(--slate); font-size:0.85rem;">Katia doit valider votre demande pour que ce cours ne compte pas dans votre abonnement. Sans validation, il reste décompté normalement.</p>
+        <div class="field"><label>Motif (obligatoire)</label><textarea id="annulpres-motif" rows="3" style="width:100%; box-sizing:border-box; resize:vertical;" placeholder="ex: mon chien est malade, empêchement de dernière minute..."></textarea></div>
+        <div class="modal-actions">
+          <button class="btn-sm" onclick="document.getElementById('modalOverlayAnnulPresence').remove()">Retour</button>
+          <button class="btn-sm primary" id="annulpres-envoyer">Envoyer la demande</button>
+        </div>
+        <p id="annulpres-statut" style="font-size:0.85rem; color:var(--slate); margin-top:8px;"></p>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+
+  document.getElementById('annulpres-envoyer').addEventListener('click', async () => {
+    const statutEl = document.getElementById('annulpres-statut');
+    const motif = document.getElementById('annulpres-motif').value.trim();
+    if (!motif) { statutEl.textContent = 'Merci d\'indiquer un motif.'; return; }
+
+    const clePres = `${groupeData.id}_${dateISO}_${membreUid}`;
+    try {
+      await updateDoc(doc(db, 'presences', clePres), {
+        demandeAnnulationMotif: motif,
+        demandeAnnulationStatut: 'attente',
+        demandeAnnulationDate: serverTimestamp()
+      });
+      document.getElementById('modalOverlayAnnulPresence').remove();
+      afficherProchainsCours();
+    } catch (err) {
+      statutEl.textContent = 'Erreur : ' + (err.message || err);
+    }
+  });
+};

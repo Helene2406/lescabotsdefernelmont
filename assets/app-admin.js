@@ -38,7 +38,7 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V77';
+const VERSION_SITE = 'V81';
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
 let currentGroupes = [];
@@ -87,6 +87,7 @@ onAuthStateChanged(auth, async (user) => {
   chargerCotisationsARenouveler();
   chargerAbonnementsARenouveler(); chargerVaccinsARappeler();
   chargerCeSoir();
+  chargerDemandesAnnulation();
   afficherMeteoDuJour();
   chargerRdv();
   chargerArticles();
@@ -628,6 +629,7 @@ function ouvrirModalMembre(membre) {
 
         <div id="mm-blocCotisation">
           <h3 style="margin-top:18px;">Cotisation annuelle du club</h3>
+          ${isEdit ? `<button class="btn-sm primary" type="button" id="mm-btnRenouvelerCotisation" style="margin-bottom:10px;">🔄 Renouveler maintenant (+1 an, marque payée)</button>` : ''}
           <div class="form-grid">
             <div class="field"><label>Date d'échéance</label><input type="date" id="mm-cotisEcheance" value="${membre?.cotisationDateEcheance||''}"></div>
             <div class="field"><label>Payée</label>
@@ -639,6 +641,7 @@ function ouvrirModalMembre(membre) {
           </div>
           ${isEdit && membre.cotisationRenouvellement ? `<p style="font-size:0.85rem; color:var(--slate);">Réponse du membre au renouvellement : <strong>${membre.cotisationRenouvellement === 'oui' ? 'Oui, elle/il souhaite renouveler' : 'Non, elle/il ne souhaite pas renouveler'}</strong></p>` : ''}
         </div>
+        <p id="mm-noteRenouvellement" class="hidden" style="font-size:0.85rem; color:var(--slate); font-style:italic;">Date et statut mis à jour ci-dessus — pense à cliquer "Enregistrer" pour valider.</p>
         <p id="mm-sansGroupeNote" class="hidden" style="font-size:0.85rem; color:var(--slate); font-style:italic;">Aucun groupe sélectionné : ce membre n'a ni abonnement de cours ni cotisation (accès Boutique/Dog Sitting uniquement). Ces champs sont mis à 0 automatiquement.</p>
 
         ${isEdit ? `
@@ -662,6 +665,19 @@ function ouvrirModalMembre(membre) {
   if (isEdit) { chargerHistoriquePaiements(membre.id); chargerHistoriquePresencesAdmin(membre.id); }
   if (isEdit) {
     document.getElementById('mm-btnChangerMdp')?.addEventListener('click', () => window.changerMotDePasseMembre(membre.id, membre.identifiant, membre.motDePasseInitial));
+
+    document.getElementById('mm-btnRenouvelerCotisation')?.addEventListener('click', () => {
+      const aujourdhui = new Date();
+      const echeanceActuelle = membre.cotisationDateEcheance ? new Date(membre.cotisationDateEcheance + 'T00:00:00') : null;
+      // Repart de l'échéance actuelle si elle est encore dans le futur (renouvellement anticipé),
+      // sinon repart d'aujourd'hui (renouvellement en retard) — jamais de date passée en résultat.
+      const base = (echeanceActuelle && echeanceActuelle > aujourdhui) ? echeanceActuelle : aujourdhui;
+      const nouvelleEcheance = new Date(base);
+      nouvelleEcheance.setFullYear(nouvelleEcheance.getFullYear() + 1);
+      document.getElementById('mm-cotisEcheance').value = dateISOLocale(nouvelleEcheance);
+      document.getElementById('mm-cotisPaye').value = 'oui';
+      document.getElementById('mm-noteRenouvellement').classList.remove('hidden');
+    });
   }
 
   function actualiserVisibiliteAbonnementCotisation() {
@@ -701,6 +717,15 @@ function ouvrirModalMembre(membre) {
       cotisationPayee: document.getElementById('mm-groupe').value ? document.getElementById('mm-cotisPaye').value === 'oui' : false,
       cotisationDateEcheance: document.getElementById('mm-groupe').value ? document.getElementById('mm-cotisEcheance').value : ''
     };
+    // Une fois vraiment renouvelée (payée + échéance repoussée d'au moins un
+    // mois), on efface l'ancienne réponse du membre pour ne pas ré-afficher
+    // une alerte périmée de son côté.
+    if (data.cotisationPayee && data.cotisationDateEcheance) {
+      const dansUnMois = new Date(); dansUnMois.setMonth(dansUnMois.getMonth() + 1);
+      if (new Date(data.cotisationDateEcheance + 'T00:00:00') > dansUnMois) {
+        data.cotisationRenouvellement = null;
+      }
+    }
     if (isEdit) {
       data.motDePasseInitial = document.getElementById('mm-mdpRef').value.trim();
     }
@@ -1085,6 +1110,17 @@ async function chargerCeSoir() {
 
 function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
+window.marquerPresenceManuelle = async (groupeId, dateISO, uid, statut) => {
+  await setDoc(doc(db, 'presences', `${groupeId}_${dateISO}_${uid}`), {
+    groupeId, uid, dateISO, statut,
+    repondu: new Date().toISOString(),
+    compteAbonnement: false,
+    marqueParAdmin: true
+  });
+  await traiterAbsencesAutomatiques(); // décompte l'abonnement immédiatement, comme pour une réponse normale
+  window.voirMembresCours(groupeId, dateISO); // rafraîchit la fenêtre avec le nouveau statut
+};
+
 window.voirMembresCours = async (groupeId, dateISO) => {
   const groupe = currentGroupes.find(g => g.id === groupeId);
   const membresDuGroupe = currentMembres.filter(m => m.groupeId === groupeId);
@@ -1108,6 +1144,10 @@ window.voirMembresCours = async (groupeId, dateISO) => {
           <div class="data-title">${escapeHtml(m.nomMaitre)}${nomsChiensActifs(m) ? ' — ' + escapeHtml(nomsChiensActifs(m)) : ''}</div>
           <div class="data-sub">${badge}</div>
         </div>
+        <div class="data-actions">
+          <button class="btn-sm primary" onclick="window.marquerPresenceManuelle('${groupeId}','${dateISO}','${m.id}','present')">✅ Présent</button>
+          <button class="btn-sm danger" onclick="window.marquerPresenceManuelle('${groupeId}','${dateISO}','${m.id}','absent-auto')">Absent (décompté)</button>
+        </div>
       </div>`;
   }).join('');
 
@@ -1115,7 +1155,7 @@ window.voirMembresCours = async (groupeId, dateISO) => {
     <div class="modal-overlay" id="modalOverlay">
       <div class="modal-box">
         <h3>${escapeHtml(groupe?.nom || '')} — ${capitalize(dateLabel)}</h3>
-        <p style="color:var(--slate); font-size:0.85rem;">Seul le membre gère sa présence ou son absence depuis son espace. Sans réponse de sa part, il est automatiquement considéré absent 24h avant le cours.</p>
+        <p style="color:var(--slate); font-size:0.85rem;">En temps normal, chaque membre valide lui-même sa présence depuis son espace. Utilise ces boutons pour aider un membre qui n'y arrive pas seul (pas d'accès, difficulté avec le site...).</p>
         <div class="data-list">
           ${lignes || '<div class="empty-state">Aucun membre dans ce groupe.</div>'}
         </div>
@@ -3736,3 +3776,73 @@ document.getElementById('btnExporterOdooNC').addEventListener('click', async () 
   telechargerCsv(csv, `Export_Odoo_NotesCredit_${dateDebut || 'debut'}_${dateFin || 'fin'}.csv`);
   statutEl.textContent = `${nc.length} note(s) de crédit exportée(s) ✓`;
 });
+
+// ==========================================================================
+// DEMANDES D'ANNULATION TARDIVE — un membre a déjà validé sa présence mais
+// demande à annuler avec justificatif. Si l'admin valide, le cours est
+// remboursé (s'il avait déjà été décompté) et ne compte plus. Si refusée,
+// le cours reste décompté normalement, comme si la demande n'avait jamais
+// été faite.
+// ==========================================================================
+async function chargerDemandesAnnulation() {
+  const bloc = document.getElementById('blocDemandesAnnulation');
+  const wrap = document.getElementById('listeDemandesAnnulation');
+  if (!wrap) return;
+
+  const snap = await getDocs(query(collection(db, 'presences'), where('demandeAnnulationStatut', '==', 'attente')));
+  const demandes = [];
+  snap.forEach(d => demandes.push({ id: d.id, ...d.data() }));
+
+  if (demandes.length === 0) {
+    bloc.style.display = 'none';
+    return;
+  }
+  bloc.style.display = '';
+
+  demandes.sort((a, b) => (a.dateISO || '').localeCompare(b.dateISO || ''));
+
+  wrap.innerHTML = demandes.map(d => {
+    const m = currentMembres.find(mm => mm.id === d.uid);
+    const groupe = currentGroupes.find(g => g.id === d.groupeId);
+    const dateLabel = new Date(d.dateISO + 'T00:00:00').toLocaleDateString('fr-BE', { weekday: 'long', day: 'numeric', month: 'long' });
+    return `
+    <div class="data-row">
+      <div class="data-main">
+        <div class="data-title">${escapeHtml(m?.nomMaitre || '?')} — ${escapeHtml(groupe?.nom || '')}</div>
+        <div class="data-sub">${capitalize(dateLabel)}</div>
+        <div class="data-sub">Motif : <em>${escapeHtml(d.demandeAnnulationMotif || '')}</em></div>
+      </div>
+      <div class="data-actions">
+        <button class="btn-sm primary" onclick="window.validerAnnulationTardive('${d.id}')">Valider (ne compte pas)</button>
+        <button class="btn-sm danger" onclick="window.refuserAnnulationTardive('${d.id}')">Refuser (reste décompté)</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.validerAnnulationTardive = async (presenceId) => {
+  const presDoc = await getDoc(doc(db, 'presences', presenceId));
+  const p = presDoc.data();
+
+  // Si le cours avait déjà été décompté de l'abonnement, on rembourse.
+  if (p.compteAbonnement) {
+    const membre = currentMembres.find(m => m.id === p.uid);
+    if (membre) {
+      await updateDoc(doc(db, 'membres', p.uid), { coursRestants: (membre.coursRestants ?? 0) + 1 });
+    }
+  }
+
+  await updateDoc(doc(db, 'presences', presenceId), {
+    statut: 'absent',
+    compteAbonnement: false,
+    demandeAnnulationStatut: 'validee'
+  });
+
+  chargerMembres();
+  chargerDemandesAnnulation();
+};
+
+window.refuserAnnulationTardive = async (presenceId) => {
+  await updateDoc(doc(db, 'presences', presenceId), { demandeAnnulationStatut: 'refusee' });
+  chargerDemandesAnnulation();
+};
