@@ -30,4 +30,14 @@ import { db, collection, getDocs } from "./firebase-config.js";
   } catch (e) {
     // En cas d'erreur (hors ligne, etc.), on garde simplement le texte par défaut du HTML.
   }
+
+  // Renumérote les cartes d'activités encore visibles (01, 02, 03...) dans
+  // leur ordre d'affichage, pour ne jamais avoir de trou (ex: 01 puis 03) si
+  // une activité a été masquée depuis l'admin.
+  const cartesVisibles = Array.from(document.querySelectorAll('.activity-card'))
+    .filter(carte => carte.style.display !== 'none');
+  cartesVisibles.forEach((carte, i) => {
+    const indexEl = carte.querySelector('.num-index');
+    if (indexEl) indexEl.textContent = String(i + 1).padStart(2, '0');
+  });
 })();
