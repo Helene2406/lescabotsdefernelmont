@@ -86,7 +86,8 @@
       <p style="color:var(--slate); font-size:0.85rem; margin-bottom:14px;">
         Vos coordonnées. Katia peut les voir, mais seule elle peut modifier votre abonnement et vos paiements.
       </p>
-      <h3>Coordonnées</h3>
+      <h3 class="bloc-titre">Coordonnées <span class="bloc-fleche">▾</span></h3>
+      <div class="bloc-contenu">
       <div class="form-grid">
         <div class="field"><label>GSM</label><input id="mp-gsm" placeholder="ex: 0032 4XX XX XX XX"></div>
         <div class="field"><label>E-mail</label><input type="email" id="mp-email" placeholder="ex: nom@exemple.be"></div>
@@ -107,19 +108,24 @@
         </div>
         <div class="field"><label>Précision (optionnel)</label><input id="mp-trouveViaDetail"></div>
       </div>
+      </div>
 
-      <h3 style="margin-top:18px;">Conducteur du chien <span style="font-weight:400; color:var(--slate);">(si différent de vous)</span></h3>
+      <h3 class="bloc-titre replie" style="margin-top:18px;">Conducteur du chien <span style="font-weight:400; color:var(--slate);">(si différent de vous)</span> <span class="bloc-fleche">▾</span></h3>
+      <div class="bloc-contenu replie">
       <div class="form-grid">
         <div class="field"><label>Nom Prénom</label><input id="mp-conducteurNom"></div>
         <div class="field"><label>GSM</label><input id="mp-conducteurGsm"></div>
       </div>
       <div class="field"><label>E-mail</label><input type="email" id="mp-conducteurEmail"></div>
+      </div>
 
-      <h3 style="margin-top:18px;">Assurance RC familiale</h3>
+      <h3 class="bloc-titre replie" style="margin-top:18px;">Assurance RC familiale <span class="bloc-fleche">▾</span></h3>
+      <div class="bloc-contenu replie">
       <div class="form-grid">
         <div class="field"><label>Compagnie</label><input id="mp-rcCompagnie"></div>
         <div class="field"><label>N° de police</label><input id="mp-rcNumero"></div>
         <div class="field"><label>Échéance (mois/année)</label><input type="month" id="mp-rcEcheance"></div>
+      </div>
       </div>
 
       <p id="mp-statut" style="font-size:0.85rem; color:var(--slate); margin-top:10px;"></p>
