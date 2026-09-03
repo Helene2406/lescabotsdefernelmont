@@ -21,7 +21,6 @@ function dateISOLocale(d) {
   return `${y}-${m}-${j}`;
 }
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
-const VERSION_SITE = 'V87';
 
 const ENTREPRISE_IBAN = 'BE58 7320 5129 6479';
 const ENTREPRISE_BIC = 'CREGBEBB';
@@ -945,6 +944,7 @@ async function chargerBoutiqueMembre() {
             <div class="data-main">
               <div class="data-title">${escapeHtml(a.nom)}</div>
               <div class="data-sub">${a.poids ? `${formaterPoids(a.poids, a.poidsUnite)} ${a.poidsUnite || 'g'} · ` : ''}${Number(a.prix).toFixed(2)} € TTC · ${a.stock > 0 ? `${a.stock} en stock` : '<span class="badge badge-danger">Rupture de stock</span>'}</div>
+              ${a.infoDescription ? `<div class="data-sub" style="white-space:pre-wrap;">${escapeHtml(a.infoDescription)}</div>` : ''}
             </div>
           </div>
           <div class="data-actions">
@@ -1136,6 +1136,7 @@ async function chargerHistoriquePresencesMembre() {
     let badge;
     if (p.statut === 'present') badge = '<span class="badge badge-ok">Présent(e)</span>';
     else if (p.statut === 'absent-auto') badge = '<span class="badge badge-warn">Non répondu — décompté</span>';
+    else if (p.statut === 'absent-justifie') badge = '<span class="badge badge-neutral">Absent(e) justifié(e) — non décompté</span>';
     else badge = '<span class="badge badge-neutral">Absent(e) (signalé)</span>';
     return `
     <div class="data-row">

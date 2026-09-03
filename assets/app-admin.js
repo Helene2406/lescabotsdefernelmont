@@ -10,6 +10,7 @@ import {
   serverTimestamp, identifiantVersEmail
 } from "./firebase-config.js";
 import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+import { VERSION_SITE } from "./version.js";
 import { getAuth as getAuthSecondary, createUserWithEmailAndPassword, signOut as signOutSecondary,
   signInWithEmailAndPassword as signInSecondary, updatePassword as updatePasswordSecondary,
   updatePassword, reauthenticateWithCredential, EmailAuthProvider, setPersistence, inMemoryPersistence }
@@ -38,7 +39,6 @@ function dateISOLocale(d) {
   const j = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${j}`;
 }
-const VERSION_SITE = 'V87';
 const JOURS_MAJ = { lundi:"Lundi", mardi:"Mardi", mercredi:"Mercredi", jeudi:"Jeudi", vendredi:"Vendredi", samedi:"Samedi", dimanche:"Dimanche" };
 
 let currentGroupes = [];
@@ -58,12 +58,13 @@ onAuthStateChanged(auth, async (user) => {
   // même quand la session était déjà ouverte depuis avant.
   updateDoc(doc(db, 'membres', user.uid), { derniereActivite: new Date().toISOString() }).catch(() => {});
 
-  // Onglet "Mots de passe" + numéro de version : réservés exclusivement à
+  // Numéro de version : visible pour tous les comptes admin (Katia ET
+  // Hélène). L'onglet "Mots de passe" reste réservé exclusivement à
   // Hélène. La fraise 🍓 reste réservée à Katia (Admin) uniquement — donc
-  // masquée pour Hélène. Aucun changement pour le compte Admin.
+  // masquée pour Hélène. Aucun autre changement pour le compte Admin.
+  document.getElementById('versionTag').textContent = VERSION_SITE;
   if (user.email === identifiantVersEmail('HeleneL')) {
     document.getElementById('tabMotsDePasseBtn').classList.remove('hidden');
-    document.getElementById('versionTag').textContent = VERSION_SITE;
     document.getElementById('fraiseDiscrete')?.remove();
     chargerListeAdminsPourMdp();
   }
@@ -82,12 +83,14 @@ onAuthStateChanged(auth, async (user) => {
   await chargerGroupes();
   await chargerMembres();
   await chargerServices();
+  activerBlocsRepliables(document);
   chargerConversations();
   chargerAnniversaires();
   chargerCotisationsARenouveler();
   chargerAbonnementsARenouveler(); chargerVaccinsARappeler();
   chargerCeSoir();
   chargerDemandesAnnulation();
+  chargerDemandesInfo();
   afficherMeteoDuJour();
   chargerRdv();
   chargerArticles();
@@ -1009,6 +1012,7 @@ async function chargerHistoriquePresencesAdmin(membreId) {
     let badge;
     if (p.statut === 'present') badge = '<span class="badge badge-ok">Présent(e)</span>';
     else if (p.statut === 'absent-auto') badge = '<span class="badge badge-warn">Non répondu — décompté</span>';
+    else if (p.statut === 'absent-justifie') badge = '<span class="badge badge-neutral">Absent(e) justifié(e) — non décompté</span>';
     else badge = '<span class="badge badge-neutral">Absent(e) (signalé)</span>';
     return `
     <div class="data-row">
@@ -1188,6 +1192,7 @@ window.voirMembresCours = async (groupeId, dateISO) => {
     if (!r) badge = '<span class="badge badge-neutral">N\'a pas encore répondu</span>';
     else if (r.statut === 'present') badge = '<span class="badge badge-ok">Présent</span>';
     else if (r.statut === 'absent-auto') badge = '<span class="badge badge-warn">Absent — non répondu (décompté)</span>';
+    else if (r.statut === 'absent-justifie') badge = '<span class="badge badge-neutral">Absent justifié (non décompté)</span>';
     else badge = '<span class="badge badge-neutral">Absent (signalé)</span>';
     return `
       <div class="data-row">
@@ -1198,6 +1203,7 @@ window.voirMembresCours = async (groupeId, dateISO) => {
         <div class="data-actions">
           <button class="btn-sm primary" onclick="window.marquerPresenceManuelle('${groupeId}','${dateISO}','${m.id}','present')">✅ Présent</button>
           <button class="btn-sm danger" onclick="window.marquerPresenceManuelle('${groupeId}','${dateISO}','${m.id}','absent-auto')">Absent (décompté)</button>
+          <button class="btn-sm" onclick="window.marquerPresenceManuelle('${groupeId}','${dateISO}','${m.id}','absent-justifie')">Absent justifié (non décompté)</button>
         </div>
       </div>`;
   }).join('');
@@ -2281,6 +2287,7 @@ function renderArticlesBoutiqueAdmin() {
           <div class="data-title">${escapeHtml(a.nom)} ${!a.actif ? '<span class="badge badge-neutral">Masqué</span>' : ''}</div>
           <div class="data-sub">${Number(a.prix).toFixed(2)} € TTC · <span class="${a.stock <= 0 ? 'badge badge-danger' : 'badge badge-ok'}">${a.stock} en stock</span></div>
           <div class="data-sub">${a.reference ? `Réf. ${escapeHtml(a.reference)}` : ''}${a.poids ? ` · ${formaterPoids(a.poids, a.poidsUnite)} ${a.poidsUnite || 'g'}` : ''}</div>
+          ${a.infoDescription ? `<div class="data-sub" style="font-style:italic;">${escapeHtml(a.infoDescription.length > 100 ? a.infoDescription.slice(0, 100) + '…' : a.infoDescription)}</div>` : ''}
         </div>
       </div>
       <div class="data-actions">
@@ -2328,6 +2335,7 @@ function ouvrirModalArticleBoutique(article) {
           <div class="field"><label>Prix TTC (€)</label><input type="number" step="0.01" id="ab-prix" value="${isEdit ? article.prix : ''}"></div>
           <div class="field"><label>Stock</label><input type="number" id="ab-stock" value="${isEdit ? article.stock : 0}"></div>
         </div>
+        <div class="field"><label>Info / description (visible par les membres dans la boutique)</label><textarea id="ab-info" rows="3" spellcheck="true" lang="fr" style="resize:vertical;" placeholder="ex: composition, taille, conseils d'utilisation...">${isEdit ? escapeHtml(article.infoDescription||'') : ''}</textarea></div>
         <div class="field"><label>Visible dans la boutique</label>
           <select id="ab-actif">
             <option value="oui" ${!isEdit || article.actif ? 'selected' : ''}>Oui</option>
@@ -2352,6 +2360,7 @@ function ouvrirModalArticleBoutique(article) {
       nom, prix, stock,
       photoURL: document.getElementById('ab-photoURL').value.trim(),
       reference: document.getElementById('ab-reference').value.trim(),
+      infoDescription: document.getElementById('ab-info').value.trim(),
       poids: document.getElementById('ab-poids').value ? parseFloat(document.getElementById('ab-poids').value) : null,
       poidsUnite: document.getElementById('ab-poidsUnite').value,
       actif: document.getElementById('ab-actif').value === 'oui'
@@ -3257,6 +3266,7 @@ function renderCampagnesAdmin() {
       </div>
       <div class="data-actions">
         <button class="btn-sm" onclick="window.voirPrecommandes('${c.id}')">Voir les précommandes</button>
+        <button class="btn-sm" onclick="window.ouvrirModalCampagne('${c.id}')">Modifier</button>
         ${c.statut !== 'cloturee'
           ? `<button class="btn-sm danger" onclick="window.cloturerCampagne('${c.id}')">Clôturer</button>`
           : `<button class="btn-sm" onclick="window.rouvrirCampagne('${c.id}')">Rouvrir</button>`}
@@ -3266,26 +3276,34 @@ function renderCampagnesAdmin() {
   }).join('');
 }
 
-document.getElementById('btnCreerCampagne').addEventListener('click', () => {
+document.getElementById('btnCreerCampagne').addEventListener('click', () => window.ouvrirModalCampagne(null));
+
+window.ouvrirModalCampagne = (campagneId) => {
+  const c = campagneId ? currentCampagnes.find(cc => cc.id === campagneId) : null;
+  const isEdit = !!c;
+  const articlesChoisisIds = new Set((c?.articles || []).map(a => a.articleId));
+
   const html = `
     <div class="modal-overlay" id="modalOverlay">
       <div class="modal-box">
-        <h3>Créer une commande groupée</h3>
-        <div class="field"><label>Titre</label><input id="cp-titre" placeholder="ex: Commande croquettes chien"></div>
-        <div class="field"><label>Description (optionnel)</label><textarea id="cp-description" rows="2" style="resize:vertical;" placeholder="ex: Précisez la quantité souhaitée par sac."></textarea></div>
-        <div class="field"><label>Date limite pour commander</label><input type="date" id="cp-dateLimite"></div>
+        <h3>${isEdit ? 'Modifier la commande groupée' : 'Créer une commande groupée'}</h3>
+        <div class="field"><label>Titre</label><input id="cp-titre" spellcheck="true" lang="fr" placeholder="ex: Commande croquettes chien" value="${isEdit ? escapeAttr(c.titre) : ''}"></div>
+        <p style="font-size:0.8rem; color:var(--slate); margin:-8px 0 10px;">La correction orthographique du navigateur est activée sur ce champ — un mot souligné en rouge propose un clic droit pour le corriger.</p>
+        <div class="field"><label>Description (optionnel)</label><textarea id="cp-description" rows="2" spellcheck="true" lang="fr" style="resize:vertical;" placeholder="ex: Précisez la quantité souhaitée par sac.">${isEdit ? escapeHtml(c.description || '') : ''}</textarea></div>
+        <div class="field"><label>Date limite pour commander</label><input type="date" id="cp-dateLimite" value="${isEdit ? (c.dateLimite || '') : ''}"></div>
         <div class="field"><label>Articles proposés</label>
           <div class="membre-check-list">
             ${currentArticlesBoutique.map(a => `
               <label class="membre-check-row">
-                <input type="checkbox" class="cp-article-check" value="${a.id}" data-nom="${escapeAttr(a.nom)}" data-prix="${a.prix}">
+                <input type="checkbox" class="cp-article-check" value="${a.id}" data-nom="${escapeAttr(a.nom)}" data-prix="${a.prix}" ${articlesChoisisIds.has(a.id) ? 'checked' : ''}>
                 <span>${escapeHtml(a.nom)} — ${Number(a.prix).toFixed(2)} € TTC</span>
               </label>`).join('') || '<p style="padding:8px; color:var(--slate); font-size:0.85rem;">Crée d\'abord tes articles (ex: les sacs de nourriture) dans "Articles" ci-dessus.</p>'}
           </div>
         </div>
+        ${isEdit ? '<p style="font-size:0.8rem; color:var(--slate);">Modifier la liste d\'articles ne touche pas aux précommandes déjà passées par les membres.</p>' : ''}
         <div class="modal-actions">
           <button class="btn-sm" onclick="window.fermerModal()">Annuler</button>
-          <button class="btn-sm primary" id="cp-save">Créer</button>
+          <button class="btn-sm primary" id="cp-save">${isEdit ? 'Enregistrer' : 'Créer'}</button>
         </div>
       </div>
     </div>`;
@@ -3295,11 +3313,18 @@ document.getElementById('btnCreerCampagne').addEventListener('click', () => {
     const titre = document.getElementById('cp-titre').value.trim();
     const dateLimite = document.getElementById('cp-dateLimite').value;
     const description = document.getElementById('cp-description').value.trim();
-    const articlesChoisis = [...document.querySelectorAll('.cp-article-check:checked')].map(c => ({
-      articleId: c.value, nom: c.dataset.nom, prix: parseFloat(c.dataset.prix)
+    const articlesChoisis = [...document.querySelectorAll('.cp-article-check:checked')].map(ch => ({
+      articleId: ch.value, nom: ch.dataset.nom, prix: parseFloat(ch.dataset.prix)
     }));
     if (!titre || !dateLimite || articlesChoisis.length === 0) {
       alert('Merci de remplir le titre, la date limite, et de choisir au moins un article.');
+      return;
+    }
+
+    if (isEdit) {
+      await updateDoc(doc(db, 'campagnes', c.id), { titre, description, dateLimite, articles: articlesChoisis });
+      window.fermerModal();
+      chargerCampagnesAdmin();
       return;
     }
 
@@ -3316,7 +3341,7 @@ document.getElementById('btnCreerCampagne').addEventListener('click', () => {
     const messageAuto = `📦 ${titre}\n\n${description ? description + '\n\n' : ''}Voici les articles disponibles :\n${listeArticles}\n\nVous pouvez précommander directement depuis votre espace membre, onglet "Boutique", jusqu'au ${dateLimiteLabel}.`;
     ouvrirModalMessageGroupe(messageAuto);
   });
-});
+};
 
 window.cloturerCampagne = async (id) => {
   await updateDoc(doc(db, 'campagnes', id), { statut: 'cloturee' });
@@ -3957,6 +3982,55 @@ document.getElementById('btnExporterOdooNC').addEventListener('click', async () 
 // le cours reste décompté normalement, comme si la demande n'avait jamais
 // été faite.
 // ==========================================================================
+async function chargerDemandesInfo() {
+  const wrap = document.getElementById('listeDemandesInfo');
+  if (!wrap) return;
+  const snap = await getDocs(collection(db, 'demandes_info'));
+  const demandes = [];
+  snap.forEach(d => demandes.push({ id: d.id, ...d.data() }));
+  demandes.sort((a, b) => (b.dateEnvoi?.seconds || 0) - (a.dateEnvoi?.seconds || 0));
+
+  const nbNonLues = demandes.filter(d => !d.lu).length;
+  document.getElementById('tabMembresBtn')?.classList.toggle('has-unread', nbNonLues > 0);
+  document.getElementById('titreDemandesInfo')?.classList.toggle('has-unread', nbNonLues > 0);
+
+  if (demandes.length === 0) {
+    wrap.innerHTML = '<div class="empty-state">Aucune demande reçue pour l\'instant.</div>';
+    return;
+  }
+
+  wrap.innerHTML = demandes.map(d => {
+    const dateLabel = d.dateEnvoi?.seconds
+      ? new Date(d.dateEnvoi.seconds * 1000).toLocaleString('fr-BE', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : '';
+    return `
+    <div class="data-row" style="${!d.lu ? 'background:#FBEFDA;' : ''}">
+      <div class="data-main">
+        <div class="data-title">${!d.lu ? '<span class="badge badge-danger">Nouveau</span> ' : ''}${escapeHtml(d.prenom || '')} ${escapeHtml(d.nom || '')}</div>
+        <div class="data-sub">${d.gsm ? `<a href="tel:${escapeAttr(d.gsm)}">${escapeHtml(d.gsm)}</a>` : ''}${d.email ? ` · <a href="mailto:${escapeAttr(d.email)}">${escapeHtml(d.email)}</a>` : ''}</div>
+        <div class="data-sub">${escapeHtml(d.ville || '')}${d.raceChien ? ' · ' + escapeHtml(d.raceChien) : ''}${d.ageChien ? ' · ' + escapeHtml(d.ageChien) : ''}${d.sterilise ? ' · Stérilisé/castré : ' + (d.sterilise === 'oui' ? 'Oui' : 'Non') : ''}</div>
+        <div class="data-sub" style="white-space:pre-wrap;">${escapeHtml(d.demande || '')}</div>
+        <div class="data-sub" style="font-style:italic;">${dateLabel}</div>
+      </div>
+      <div class="data-actions">
+        ${!d.lu ? `<button class="btn-sm" onclick="window.marquerDemandeInfoLue('${d.id}')">Marquer comme lue</button>` : ''}
+        <button class="btn-sm danger" onclick="window.supprimerDemandeInfo('${d.id}')">Supprimer</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.marquerDemandeInfoLue = async (id) => {
+  await updateDoc(doc(db, 'demandes_info', id), { lu: true });
+  chargerDemandesInfo();
+};
+
+window.supprimerDemandeInfo = async (id) => {
+  if (!confirm('Supprimer cette demande ?')) return;
+  await deleteDoc(doc(db, 'demandes_info', id));
+  chargerDemandesInfo();
+};
+
 async function chargerDemandesAnnulation() {
   const bloc = document.getElementById('blocDemandesAnnulation');
   const wrap = document.getElementById('listeDemandesAnnulation');

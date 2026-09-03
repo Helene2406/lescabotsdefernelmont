@@ -194,6 +194,17 @@
   background: #C0392B;
 }
 
+.bloc-titre.has-unread::after {
+  content: "";
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #C0392B;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
 @media (max-width: 480px) {
   .tab-btn { flex: 1 1 calc(50% - 8px); }
 }

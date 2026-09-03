@@ -10,6 +10,9 @@
 // HTML. Lecture seule, publique, aucune connexion requise.
 // ==========================================================================
 import { db, collection, getDocs } from "./firebase-config.js";
+import { VERSION_SITE } from "./version.js";
+
+document.getElementById('versionPublic') && (document.getElementById('versionPublic').textContent = VERSION_SITE);
 
 (async () => {
   try {

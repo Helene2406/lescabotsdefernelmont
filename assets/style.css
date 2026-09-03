@@ -642,3 +642,52 @@ blockquote.pull-quote {
 @media (max-width: 600px) {
   .badge-helene { width: 36px; bottom: 12px; right: 12px; }
 }
+
+/* Formulaire public "Demande d'information" (page Nous contacter) */
+.contact-form-card {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  padding: 32px;
+  margin-top: 40px;
+}
+.contact-form-card h2 { font-size: 1.5rem; color: var(--navy-dark); margin-top: 0; }
+.contact-form-card > p { color: var(--slate); margin-bottom: 24px; }
+.cf-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 20px;
+}
+.cf-field { margin-bottom: 16px; }
+.cf-field.cf-full { grid-column: 1 / -1; }
+.cf-field label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.92rem;
+  color: var(--navy-dark);
+  margin-bottom: 6px;
+}
+.cf-field input,
+.cf-field select,
+.cf-field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #D4DAE0;
+  border-radius: 4px;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+.cf-field textarea { resize: vertical; min-height: 100px; }
+.cf-note {
+  font-size: 0.82rem;
+  color: var(--slate-light);
+  margin: 4px 0 18px;
+}
+.cf-statut {
+  font-size: 0.9rem;
+  margin-top: 12px;
+}
+.cf-statut.ok { color: #2F6B4F; }
+.cf-statut.err { color: #B3432B; }
