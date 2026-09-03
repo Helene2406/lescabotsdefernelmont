@@ -48,6 +48,42 @@
 
 <section>
   <div class="container">
+    <div class="contact-form-card">
+      <h2 class="cf-toggle" id="cfToggle">
+        <span>Une question ? Une envie de nous rejoindre ?</span>
+        <span class="cf-toggle-arrow" id="cfArrow">▾</span>
+      </h2>
+      <div id="cfBody">
+        <p>Laissez-nous vos coordonnées et quelques infos sur votre compagnon, Katia vous recontactera rapidement.</p>
+        <form id="formDemandeInfo">
+          <div class="cf-grid">
+            <div class="cf-field"><label>Nom *</label><input type="text" id="cf-nom" required></div>
+            <div class="cf-field"><label>Prénom *</label><input type="text" id="cf-prenom" required></div>
+            <div class="cf-field"><label>Adresse e-mail *</label><input type="email" id="cf-email" required></div>
+            <div class="cf-field"><label>GSM *</label><input type="tel" id="cf-gsm" required></div>
+            <div class="cf-field"><label>Région (ville) *</label><input type="text" id="cf-ville" required></div>
+            <div class="cf-field"><label>Race du chien *</label><input type="text" id="cf-race" required></div>
+            <div class="cf-field"><label>Âge du chien *</label><input type="text" id="cf-age" placeholder="ex: 8 mois, 3 ans..." required></div>
+            <div class="cf-field"><label>Castré / stérilisé *</label>
+              <select id="cf-sterilise" required>
+                <option value="">—</option>
+                <option value="oui">Oui</option>
+                <option value="non">Non</option>
+              </select>
+            </div>
+            <div class="cf-field cf-full"><label>Votre demande *</label><textarea id="cf-demande" required></textarea></div>
+          </div>
+          <p class="cf-note">* Champs obligatoires</p>
+          <button type="submit" class="btn btn-primary" id="cf-submit">Envoyer ma demande</button>
+          <p class="cf-statut" id="cf-statut"></p>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="container">
     <div class="two-col">
       <div class="contact-card">
         <div class="cc-side"><img src="assets/logo.png" alt="Logo Les Cabots de Fernelmont"></div>
@@ -77,41 +113,18 @@
   </div>
 </section>
 
-<section>
-  <div class="container">
-    <div class="contact-form-card">
-      <h2>Une question ? Une envie de nous rejoindre ?</h2>
-      <p>Laissez-nous vos coordonnées et quelques infos sur votre compagnon, Katia vous recontactera rapidement.</p>
-      <form id="formDemandeInfo">
-        <div class="cf-grid">
-          <div class="cf-field"><label>Nom *</label><input type="text" id="cf-nom" required></div>
-          <div class="cf-field"><label>Prénom *</label><input type="text" id="cf-prenom" required></div>
-          <div class="cf-field"><label>Adresse e-mail *</label><input type="email" id="cf-email" required></div>
-          <div class="cf-field"><label>GSM *</label><input type="tel" id="cf-gsm" required></div>
-          <div class="cf-field"><label>Région (ville) *</label><input type="text" id="cf-ville" required></div>
-          <div class="cf-field"><label>Race du chien *</label><input type="text" id="cf-race" required></div>
-          <div class="cf-field"><label>Âge du chien *</label><input type="text" id="cf-age" placeholder="ex: 8 mois, 3 ans..." required></div>
-          <div class="cf-field"><label>Castré / stérilisé *</label>
-            <select id="cf-sterilise" required>
-              <option value="">—</option>
-              <option value="oui">Oui</option>
-              <option value="non">Non</option>
-            </select>
-          </div>
-          <div class="cf-field cf-full"><label>Votre demande *</label><textarea id="cf-demande" required></textarea></div>
-        </div>
-        <p class="cf-note">* Champs obligatoires</p>
-        <button type="submit" class="btn btn-primary" id="cf-submit">Envoyer ma demande</button>
-        <p class="cf-statut" id="cf-statut"></p>
-      </form>
-    </div>
-  </div>
-</section>
-
 <script type="module">
   import { db, collection, addDoc, serverTimestamp } from "./assets/firebase-config.js";
   import { VERSION_SITE } from "./assets/version.js";
   document.getElementById('versionPublic') && (document.getElementById('versionPublic').textContent = VERSION_SITE);
+
+  document.getElementById('cfToggle').addEventListener('click', () => {
+    const body = document.getElementById('cfBody');
+    const arrow = document.getElementById('cfArrow');
+    const estOuvert = body.style.display !== 'none';
+    body.style.display = estOuvert ? 'none' : '';
+    arrow.classList.toggle('cf-toggle-arrow-fermee', estOuvert);
+  });
 
   document.getElementById('formDemandeInfo').addEventListener('submit', async (e) => {
     e.preventDefault();
