@@ -1,4 +1,4 @@
-// Projet Firebase : cabots-de-fernelmont-901ee — Site "Les Cabots de Fernelmont" — V01-001
+// Projet Firebase : cabots-de-fernelmont-901ee — Site "Les Cabots de Fernelmont" — V01-006
 // Convention de versionnage des livraisons : VJJ-NNN (JJ = numéro du jour de
 // travail sur ce site, pas la date calendaire ; NNN = numéro de livraison
 // dans cette journée de travail, repart à 001 à chaque nouveau jour de
@@ -144,6 +144,10 @@ service cloud.firestore {
     match /precommandes/{id} {
       allow read: if estConnecte() && (resource.data.membreId == request.auth.uid || estAdmin());
       allow create, update: if estConnecte() && request.resource.data.membreId == request.auth.uid;
+      // L'admin peut aussi marquer une précommande "vue" (point rouge sur
+      // l'onglet Boutique), sans pouvoir changer les lignes/quantités.
+      allow update: if estAdmin() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['vu']);
       allow delete: if estConnecte() && (resource.data.membreId == request.auth.uid || estAdmin());
     }
 

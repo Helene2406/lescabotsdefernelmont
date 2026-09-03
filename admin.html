@@ -15,7 +15,7 @@
 <body class="app-body">
 
 <div class="app-topbar">
-  <div class="app-title">Bonjour <span id="adminNom">Katia</span> <span class="fraise-discrete" id="fraiseDiscrete" title="🍓">🍓</span> <small>Espace administrateur · <span id="versionTag" style="opacity:0.6;"></span></small></div>
+  <div class="app-title">Bonjour <span id="adminNom">Katia</span> <span class="fraise-discrete" id="fraiseDiscrete" title="🍓">🍓</span> <small>Espace administrateur</small></div>
   <div style="display:flex; align-items:center; gap:8px;">
     <button class="btn-sm" id="btnMonCompte" style="background:transparent; border-color:rgba(255,255,255,0.4); color:#fff;">🔑 Mon compte</button>
     <button class="btn-sm" id="logoutBtn" style="background:transparent; border-color:rgba(255,255,255,0.4); color:#fff;">Déconnexion</button>
@@ -298,5 +298,6 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script type="module" src="assets/app-admin.js"></script>
+<div id="versionTagCoin" style="position:fixed; bottom:10px; right:14px; font-size:0.72rem; color:var(--slate-light); opacity:0.55; z-index:30; pointer-events:none; background:var(--white); padding:2px 6px; border-radius:4px;"></div>
 </body>
 </html>
