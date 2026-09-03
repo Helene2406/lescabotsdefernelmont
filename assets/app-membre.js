@@ -170,21 +170,18 @@ function afficherRappelAbonnement() {
     return;
   }
 
-  // La demande interactive (boutons Oui/Non) ne se déclenche qu'à
-  // exactement 2 cours restants. À 1 cours restant sans réponse, le
-  // message reste affiché mais en simple rappel, sans redemander.
-  if (reste === 2) {
-    zone.innerHTML = `
-      <div class="banner-alert">
-        Il vous reste ${reste} cours sur votre abonnement. Souhaitez-vous le renouveler (11 cours) ?
-        <div class="presence-btns">
-          <button class="btn-sm primary" onclick="window.repondreAbonnement('oui')">Oui, je renouvelle</button>
-          <button class="btn-sm" onclick="window.repondreAbonnement('non')">Non, pas pour l'instant</button>
-        </div>
-      </div>`;
-  } else {
-    zone.innerHTML = `<div class="banner-alert">Il vous reste ${reste} cours sur votre abonnement. Pensez à contacter Katia si vous souhaitez le renouveler.</div>`;
-  }
+  // La demande interactive (boutons Oui/Non) reste affichée tant que le
+  // membre n'a pas répondu, à 2 comme à 1 cours restant — pas de nouvelle
+  // demande séparée, juste la même qui continue jusqu'à réponse ou jusqu'à
+  // l'abonnement épuisé (0 cours, où on bloque les réservations à la place).
+  zone.innerHTML = `
+    <div class="banner-alert">
+      Il vous reste ${reste} cours sur votre abonnement. Souhaitez-vous le renouveler (11 cours) ?
+      <div class="presence-btns">
+        <button class="btn-sm primary" onclick="window.repondreAbonnement('oui')">Oui, je renouvelle</button>
+        <button class="btn-sm" onclick="window.repondreAbonnement('non')">Non, pas pour l'instant</button>
+      </div>
+    </div>`;
 }
 
 window.repondreAbonnement = async (reponse) => {
