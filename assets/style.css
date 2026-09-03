@@ -532,6 +532,7 @@ section { padding: 64px 0; }
   margin: 18px 0 0 0;
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 10px;
 }
 
@@ -542,6 +543,19 @@ section { padding: 64px 0; }
   padding: 6px 14px;
   border-radius: 999px;
   border: 1px solid #E3DFD3;
+}
+
+/* Élément invisible pleine largeur qui force un retour à la ligne dans une
+   liste flex (ex: 3 bulles puis 2, plutôt qu'un retour à la ligne qui
+   dépend de la largeur disponible). */
+.tag-list .tag-break {
+  flex-basis: 100%;
+  width: 0;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
 }
 
 blockquote.pull-quote {
@@ -652,7 +666,23 @@ blockquote.pull-quote {
   margin-top: 40px;
 }
 .contact-form-card h2 { font-size: 1.5rem; color: var(--navy-dark); margin-top: 0; }
-.contact-form-card > p { color: var(--slate); margin-bottom: 24px; }
+.contact-form-card #cfBody > p { color: var(--slate); margin-bottom: 24px; }
+
+.cf-toggle {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  user-select: none;
+}
+.cf-toggle-arrow {
+  font-size: 0.7em;
+  color: var(--brass);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+.cf-toggle-arrow.cf-toggle-arrow-fermee { transform: rotate(-90deg); }
 .cf-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
