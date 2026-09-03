@@ -2912,11 +2912,16 @@ window.retelechargerNoteCredit = async (numeroNC) => {
 async function chargerComptaAdmin() {
   const facturesSnap = await getDocs(collection(db, 'factures'));
   const factures = [];
-  facturesSnap.forEach(d => factures.push({ id: d.id, type: 'facture', ...d.data() }));
+  // IMPORTANT : le document facture a lui-même un champ "type" (ex: 'commande',
+  // 'paiement' — la nature de l'achat facturé). On utilise donc "_docCompta"
+  // pour ce marqueur interne (facture / note de crédit) afin de ne jamais
+  // l'écraser avec ...d.data() — c'était le bug qui affichait certaines
+  // factures comme "Note de crédit".
+  facturesSnap.forEach(d => factures.push({ id: d.id, ...d.data(), _docCompta: 'facture' }));
 
   const ncSnap = await getDocs(collection(db, 'notes_credit'));
   const notesCredit = [];
-  ncSnap.forEach(d => notesCredit.push({ id: d.id, type: 'nc', ...d.data() }));
+  ncSnap.forEach(d => notesCredit.push({ id: d.id, ...d.data(), _docCompta: 'nc' }));
 
   let tous = [...factures, ...notesCredit];
   tous.sort((a, b) => (b.dateEmission || '').localeCompare(a.dateEmission || ''));
@@ -2937,7 +2942,7 @@ async function chargerComptaAdmin() {
 
   wrap.innerHTML = tous.map(doc => {
     const membre = currentMembres.find(m => m.id === doc.membreId) || currentMembresArchives.find(m => m.id === doc.membreId);
-    if (doc.type === 'facture') {
+    if (doc._docCompta === 'facture') {
       const badge = doc.statut === 'annulee' ? '<span class="badge badge-danger">Annulée</span>' : '<span class="badge badge-ok">Facture</span>';
       return `
       <div class="data-row">
