@@ -170,20 +170,43 @@ function afficherRappelAbonnement() {
     return;
   }
 
-  zone.innerHTML = `
-    <div class="banner-alert">
-      Il vous reste ${reste} cours sur votre abonnement. Souhaitez-vous le renouveler (11 cours) ?
-      <div class="presence-btns">
-        <button class="btn-sm primary" onclick="window.repondreAbonnement('oui')">Oui, je renouvelle</button>
-        <button class="btn-sm" onclick="window.repondreAbonnement('non')">Non, pas pour l'instant</button>
-      </div>
-    </div>`;
+  // La demande interactive (boutons Oui/Non) ne se déclenche qu'à
+  // exactement 2 cours restants. À 1 cours restant sans réponse, le
+  // message reste affiché mais en simple rappel, sans redemander.
+  if (reste === 2) {
+    zone.innerHTML = `
+      <div class="banner-alert">
+        Il vous reste ${reste} cours sur votre abonnement. Souhaitez-vous le renouveler (11 cours) ?
+        <div class="presence-btns">
+          <button class="btn-sm primary" onclick="window.repondreAbonnement('oui')">Oui, je renouvelle</button>
+          <button class="btn-sm" onclick="window.repondreAbonnement('non')">Non, pas pour l'instant</button>
+        </div>
+      </div>`;
+  } else {
+    zone.innerHTML = `<div class="banner-alert">Il vous reste ${reste} cours sur votre abonnement. Pensez à contacter Katia si vous souhaitez le renouveler.</div>`;
+  }
 }
 
 window.repondreAbonnement = async (reponse) => {
   await updateDoc(doc(db, 'membres', membreUid), { abonnementRenouvellement: reponse });
   membreData.abonnementRenouvellement = reponse;
   afficherRappelAbonnement();
+
+  // Prévient Katia par message (comme un message de chat normal, donc
+  // visible avec le point rouge habituel sur l'onglet Messages) pour
+  // qu'elle sache si elle peut préparer la facture d'abonnement (11 cours)
+  // ou non.
+  const reste = membreData.coursRestants ?? 0;
+  const texteAuto = reponse === 'oui'
+    ? `🔔 Renouvellement d'abonnement : je souhaite renouveler pour 11 cours (il me reste ${reste} cours actuellement).`
+    : `🔔 Renouvellement d'abonnement : je ne souhaite pas renouveler pour l'instant (il me reste ${reste} cours actuellement).`;
+  await addDoc(collection(db, 'conversations', membreUid, 'messages'), {
+    texte: texteAuto, expediteur: 'membre', dateEnvoi: new Date().toISOString(), lu: false
+  });
+  await setDoc(doc(db, 'conversations', membreUid), {
+    dernierMessage: texteAuto, dateDernierMessage: new Date().toISOString(), nonLuAdmin: true
+  }, { merge: true });
+  chargerChat();
 };
 
 function afficherRappelCotisation() {
