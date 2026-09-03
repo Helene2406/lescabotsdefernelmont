@@ -4003,6 +4003,37 @@ function chargerMotsDePasseAdmin() {
 
 document.getElementById('rechercheMdp')?.addEventListener('input', () => chargerMotsDePasseAdmin());
 
+document.getElementById('btnExporterMdpExcel')?.addEventListener('click', () => {
+  const terme = (document.getElementById('rechercheMdp')?.value || '').trim().toLowerCase();
+  let tous = [
+    ...currentAdminsPourMdp.map(m => ({ ...m, estAdminCompte: true })),
+    ...currentMembres.map(m => ({ ...m, estAdminCompte: false }))
+  ].sort((a, b) => (a.nomMaitre || '').localeCompare(b.nomMaitre || '', 'fr'));
+
+  if (terme) {
+    tous = tous.filter(m =>
+      (m.nomMaitre || '').toLowerCase().includes(terme) ||
+      (m.identifiant || '').toLowerCase().includes(terme)
+    );
+  }
+
+  const lignes = tous.map(m => ({
+    'Nom': m.nomMaitre || '',
+    'Compte': m.estAdminCompte ? 'Admin' : 'Membre',
+    'Identifiant': m.identifiant || '',
+    'Mot de passe': m.motDePasseInitial || '(inconnu)',
+    'E-mail': m.email || '',
+    'GSM': m.gsm || '',
+    'Dernière connexion': m.derniereConnexion ? new Date(m.derniereConnexion).toLocaleString('fr-BE') : 'jamais connecté(e)'
+  }));
+
+  const feuille = XLSX.utils.json_to_sheet(lignes);
+  feuille['!cols'] = [{ wch: 24 }, { wch: 8 }, { wch: 18 }, { wch: 16 }, { wch: 28 }, { wch: 16 }, { wch: 20 }];
+  const classeur = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(classeur, feuille, 'Identifiants');
+  XLSX.writeFile(classeur, `Liste-distribution-membres-${dateISOLocale(new Date())}.xlsx`);
+});
+
 // ==========================================================================
 // EXPORT ODOO — génère un CSV prêt à importer dans Odoo (Comptabilité →
 // Clients → Factures → Importer des enregistrements). Une ligne par ligne
