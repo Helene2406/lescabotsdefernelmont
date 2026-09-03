@@ -288,6 +288,7 @@
       <h2>🔑 Mots de passe — tous les membres</h2>
       <p style="color:var(--slate); font-size:0.85rem; margin-bottom:14px;">Onglet visible uniquement pour toi. Toujours à jour : ce mot de passe est le vrai mot de passe de connexion, synchronisé automatiquement dès qu'il est créé ou changé.</p>
       <input type="text" id="rechercheMdp" placeholder="🔍 Rechercher un membre..." style="width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #D4DAE0; border-radius:6px; margin-bottom:14px; font-size:0.95rem;">
+      <button class="btn-sm" id="btnExporterMdpExcel" style="margin-bottom:14px;">📊 Exporter en Excel (.xlsx)</button>
       <div class="data-list" id="listeMotsDePasse"><div class="empty-state">...</div></div>
     </div>
   </div>
@@ -297,6 +298,7 @@
 <div id="modalZone"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script type="module" src="assets/app-admin.js"></script>
 <div id="versionTagCoin" style="position:fixed; bottom:10px; right:14px; font-size:0.72rem; color:var(--slate-light); opacity:0.55; z-index:30; pointer-events:none; background:var(--white); padding:2px 6px; border-radius:4px;"></div>
 </body>
