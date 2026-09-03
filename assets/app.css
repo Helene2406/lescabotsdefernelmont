@@ -271,6 +271,16 @@
 .data-row .data-sub { color: var(--slate); font-size: 0.82rem; margin-top: 2px; }
 .data-row .data-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 
+/* Liste "Membres du cours" (admin > Ce soir) : les 3 boutons de présence
+   toujours côte à côte sur une seule ligne, sous le nom du membre. */
+.ce-soir-membres .data-row { flex-direction: column; align-items: stretch; }
+.ce-soir-membres .data-actions { flex-wrap: nowrap; margin-top: 8px; }
+.ce-soir-membres .data-actions .btn-sm { flex: 1; text-align: center; white-space: nowrap; }
+@media (max-width: 480px) {
+  .ce-soir-membres .data-actions { flex-wrap: wrap; }
+  .ce-soir-membres .data-actions .btn-sm { flex: 1 1 auto; }
+}
+
 .data-row-left {
   display: flex;
   align-items: center;

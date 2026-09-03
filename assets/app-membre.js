@@ -289,7 +289,13 @@ async function afficherProchainsCours() {
         const heureLimiteAnnul = new Date(heureCours.getTime() - 60 * 60 * 1000); // 1h avant le cours
         const encoreTemps = new Date() < heureLimiteAnnul;
 
-        if (presence.demandeAnnulationStatut === 'attente') {
+        if (!delaiDepasse) {
+          // Plus de 24h avant le cours : changement d'avis totalement libre,
+          // sans justificatif ni validation admin.
+          statutHtml = `<span class="badge badge-ok">Présence confirmée</span>
+            <button class="btn-sm" style="margin-top:6px; display:block;" onclick="window.repondrePresence('${dateISO}','absent')">Changer pour absent</button>
+            <p style="font-size:0.76rem; color:var(--slate-light); margin-top:4px;">Vous pouvez encore changer d'avis librement jusqu'à 24h avant le cours.</p>`;
+        } else if (presence.demandeAnnulationStatut === 'attente') {
           statutHtml = `<span class="badge badge-warn">Présence confirmée</span><br>
             <span class="badge badge-neutral" style="margin-top:4px;">Demande d'annulation envoyée — en attente de validation par Katia</span>`;
         } else if (presence.demandeAnnulationStatut === 'refusee') {
@@ -304,6 +310,12 @@ async function afficherProchainsCours() {
         }
       } else if (presence.statut === 'absent-auto') {
         statutHtml = '<span class="badge badge-warn">Pas de réponse dans les délais — comptabilisé(e) absent(e), ce cours compte dans votre abonnement.</span>';
+      } else if (!delaiDepasse) {
+        // Absence signalée volontairement, mais on est encore à plus de 24h
+        // du cours : le membre peut librement revenir sur sa décision.
+        statutHtml = `<span class="badge badge-neutral">Absence signalée</span>
+          <button class="btn-sm primary" style="margin-top:6px; display:block;" onclick="window.repondrePresence('${dateISO}','present')">Changer pour présent</button>
+          <p style="font-size:0.76rem; color:var(--slate-light); margin-top:4px;">Vous pouvez encore changer d'avis librement jusqu'à 24h avant le cours.</p>`;
       } else {
         statutHtml = '<span class="badge badge-neutral">Absence signalée</span>';
       }
@@ -1331,16 +1343,33 @@ async function chargerCampagnesMembre() {
         ${(c.articles || []).map(a => `
           <div class="field">
             <label>${escapeHtml(a.nom)} (${a.prix.toFixed(2)} € TTC)</label>
-            <input type="number" min="0" value="${quantitesActuelles[a.articleId] || 0}" id="camp-${c.id}-${a.articleId}">
+            <input type="number" min="0" value="${quantitesActuelles[a.articleId] || 0}" id="camp-${c.id}-${a.articleId}" data-prix="${a.prix}" oninput="window.recalculerTotalPrecommande('${c.id}')">
           </div>`).join('')}
       </div>
-      <button class="btn-sm primary" style="margin-top:10px;" onclick="window.envoyerPrecommande('${c.id}')">
+      <p id="camp-total-${c.id}" style="font-weight:600; color:var(--navy-dark); margin-top:10px;"></p>
+      <button class="btn-sm primary" style="margin-top:4px;" onclick="window.envoyerPrecommande('${c.id}')">
         ${maPrecommande ? 'Mettre à jour ma précommande' : 'Envoyer ma précommande'}
       </button>
       <p id="camp-statut-${c.id}" style="font-size:0.85rem; color:var(--slate); margin-top:6px;"></p>
     </div>`;
   }).join('');
+
+  // Affiche le total initial (précommande déjà envoyée ou tout à 0).
+  campagnes.forEach(c => window.recalculerTotalPrecommande(c.id));
 }
+
+window.recalculerTotalPrecommande = (campagneId) => {
+  const el = document.getElementById(`camp-total-${campagneId}`);
+  if (!el) return;
+  const inputs = document.querySelectorAll(`input[id^="camp-${campagneId}-"]`);
+  let total = 0;
+  inputs.forEach(input => {
+    const qte = parseInt(input.value, 10) || 0;
+    const prix = parseFloat(input.dataset.prix) || 0;
+    total += qte * prix;
+  });
+  el.textContent = `Total à payer : ${total.toFixed(2)} € TTC`;
+};
 
 window.envoyerPrecommande = async (campagneId) => {
   const snap = await getDoc(doc(db, 'campagnes', campagneId));
@@ -1356,8 +1385,14 @@ window.envoyerPrecommande = async (campagneId) => {
   if (lignes.length === 0) { statutEl.textContent = 'Indiquez au moins une quantité.'; return; }
 
   const total = lignes.reduce((s, l) => s + l.prix * l.quantite, 0);
+
+  // Le membre doit valider explicitement le prix avant l'envoi.
+  const recap = lignes.map(l => `${l.quantite} × ${l.nom} = ${(l.prix * l.quantite).toFixed(2)} €`).join('\n');
+  const confirme = confirm(`Confirmer votre précommande ?\n\n${recap}\n\nTotal à payer : ${total.toFixed(2)} € TTC`);
+  if (!confirme) return;
+
   await setDoc(doc(db, 'precommandes', `${campagneId}_${membreUid}`), {
-    campagneId, membreId: membreUid, lignes, total, dateCommande: serverTimestamp()
+    campagneId, membreId: membreUid, lignes, total, dateCommande: serverTimestamp(), vu: false
   });
   statutEl.textContent = `Précommande envoyée (${total.toFixed(2)} € TTC) ✓`;
 };

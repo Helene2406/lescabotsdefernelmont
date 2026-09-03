@@ -62,7 +62,7 @@ onAuthStateChanged(auth, async (user) => {
   // Hélène). L'onglet "Mots de passe" reste réservé exclusivement à
   // Hélène. La fraise 🍓 reste réservée à Katia (Admin) uniquement — donc
   // masquée pour Hélène. Aucun autre changement pour le compte Admin.
-  document.getElementById('versionTag').textContent = VERSION_SITE;
+  document.getElementById('versionTagCoin').textContent = VERSION_SITE;
   if (user.email === identifiantVersEmail('HeleneL')) {
     document.getElementById('tabMotsDePasseBtn').classList.remove('hidden');
     document.getElementById('fraiseDiscrete')?.remove();
@@ -1210,10 +1210,10 @@ window.voirMembresCours = async (groupeId, dateISO) => {
 
   const html = `
     <div class="modal-overlay" id="modalOverlay">
-      <div class="modal-box">
+      <div class="modal-box" style="max-width:640px;">
         <h3>${escapeHtml(groupe?.nom || '')} — ${capitalize(dateLabel)}</h3>
         <p style="color:var(--slate); font-size:0.85rem;">En temps normal, chaque membre valide lui-même sa présence depuis son espace. Utilise ces boutons pour aider un membre qui n'y arrive pas seul (pas d'accès, difficulté avec le site...).</p>
-        <div class="data-list">
+        <div class="data-list ce-soir-membres">
           ${lignes || '<div class="empty-state">Aucun membre dans ce groupe.</div>'}
         </div>
         <div class="modal-actions">
@@ -2394,8 +2394,11 @@ async function chargerCommandesAdmin() {
   commandes.sort((a, b) => (b.dateCreation?.toMillis?.() || 0) - (a.dateCreation?.toMillis?.() || 0));
 
   const enAttente = commandes.filter(c => c.statut === 'en_attente').length;
+  const precSnap = await getDocs(collection(db, 'precommandes'));
+  let precommandesNonVues = 0;
+  precSnap.forEach(d => { if (d.data().vu === false) precommandesNonVues++; });
   const tabBtn = document.getElementById('tabBoutiqueBtn');
-  if (tabBtn) tabBtn.classList.toggle('has-unread', enAttente > 0);
+  if (tabBtn) tabBtn.classList.toggle('has-unread', enAttente > 0 || precommandesNonVues > 0);
 
   const wrap = document.getElementById('listeCommandes');
   if (commandes.length === 0) {
@@ -3240,12 +3243,18 @@ window.marquerDogSittingVuAdmin = async () => {
 // par membre pour facturer/répartir ensuite.
 // ==========================================================================
 let currentCampagnes = [];
+let campagnesAvecNouvellesPrecommandes = new Set();
 
 async function chargerCampagnesAdmin() {
   const snap = await getDocs(collection(db, 'campagnes'));
   currentCampagnes = [];
   snap.forEach(d => currentCampagnes.push({ id: d.id, ...d.data() }));
   currentCampagnes.sort((a, b) => (b.dateLimite || '').localeCompare(a.dateLimite || ''));
+
+  const precSnap = await getDocs(collection(db, 'precommandes'));
+  campagnesAvecNouvellesPrecommandes = new Set();
+  precSnap.forEach(d => { if (d.data().vu === false) campagnesAvecNouvellesPrecommandes.add(d.data().campagneId); });
+
   renderCampagnesAdmin();
 }
 
@@ -3258,10 +3267,11 @@ function renderCampagnesAdmin() {
   wrap.innerHTML = currentCampagnes.map(c => {
     const dateLimiteLabel = c.dateLimite ? new Date(c.dateLimite + 'T00:00:00').toLocaleDateString('fr-BE') : '';
     const badge = c.statut === 'cloturee' ? '<span class="badge badge-neutral">Clôturée</span>' : '<span class="badge badge-ok">Ouverte</span>';
+    const badgeNouveau = campagnesAvecNouvellesPrecommandes.has(c.id) ? ' <span class="badge badge-danger">Nouvelle(s) précommande(s)</span>' : '';
     return `
     <div class="data-row">
       <div class="data-main">
-        <div class="data-title">${escapeHtml(c.titre)} ${badge}</div>
+        <div class="data-title">${escapeHtml(c.titre)} ${badge}${badgeNouveau}</div>
         <div class="data-sub">Date limite : ${dateLimiteLabel} · ${(c.articles||[]).length} article(s)</div>
       </div>
       <div class="data-actions">
@@ -3363,7 +3373,16 @@ window.voirPrecommandes = async (campagneId) => {
   const campagne = currentCampagnes.find(c => c.id === campagneId);
   const snap = await getDocs(query(collection(db, 'precommandes'), where('campagneId', '==', campagneId)));
   const precommandes = [];
-  snap.forEach(d => precommandes.push(d.data()));
+  snap.forEach(d => precommandes.push({ id: d.id, ...d.data() }));
+
+  // Marque les précommandes de cette campagne comme vues (fait disparaître
+  // le point rouge sur l'onglet Boutique une fois consultées).
+  const aMarquer = precommandes.filter(p => p.vu === false);
+  if (aMarquer.length > 0) {
+    await Promise.all(aMarquer.map(p => updateDoc(doc(db, 'precommandes', p.id), { vu: true })));
+    chargerCampagnesAdmin();
+    chargerCommandesAdmin();
+  }
 
   // Total par article, pour la commande fournisseur
   const totauxParArticle = {};
@@ -3397,12 +3416,56 @@ window.voirPrecommandes = async (campagneId) => {
         <h3>${escapeHtml(campagne?.titre || '')}</h3>
         <h3 style="margin-top:14px;">Total à commander au fournisseur</h3>
         <div class="data-list">${totauxHtml}</div>
+        ${Object.keys(totauxParArticle).length ? `<button class="btn-sm" id="btnPdfFournisseur" style="margin-top:10px;">📄 PDF pour le fournisseur (quantités uniquement)</button>` : ''}
         <h3 style="margin-top:18px;">Détail par membre</h3>
         <div class="data-list">${detailMembres}</div>
         <div class="modal-actions"><button class="btn-sm" onclick="window.fermerModal()">Fermer</button></div>
       </div>
     </div>`;
   document.getElementById('modalZone').innerHTML = html;
+  document.getElementById('btnPdfFournisseur')?.addEventListener('click', () => {
+    window.telechargerPdfFournisseur(campagne?.titre || '', totauxParArticle);
+  });
+};
+
+// Récap fournisseur : quantité totale par article, regroupée (jamais une
+// ligne par membre) — SANS prix, puisque le prix affiché aux membres est le
+// prix de vente et non le prix d'achat chez le fournisseur (Arion).
+window.telechargerPdfFournisseur = (titreCampagne, totauxParArticle) => {
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF();
+  let y = 20;
+
+  pdf.setFontSize(16); pdf.setFont(undefined, 'bold');
+  pdf.text(ENTREPRISE.nom, 15, y);
+  pdf.setFontSize(10); pdf.setFont(undefined, 'normal');
+  y += 6; pdf.text(ENTREPRISE.enseigne, 15, y);
+  y += 5; pdf.text(`${ENTREPRISE.email} — ${ENTREPRISE.tel}`, 15, y);
+
+  y += 14;
+  pdf.setFontSize(14); pdf.setFont(undefined, 'bold');
+  pdf.text('Commande fournisseur', 15, y);
+  pdf.setFontSize(10); pdf.setFont(undefined, 'normal');
+  y += 7; pdf.text(titreCampagne || '', 15, y);
+  y += 5; pdf.text(`Générée le ${new Date().toLocaleDateString('fr-BE')}`, 15, y);
+
+  y += 12;
+  pdf.setFillColor(27, 58, 92);
+  pdf.rect(15, y, 180, 8, 'F');
+  pdf.setTextColor(255, 255, 255); pdf.setFont(undefined, 'bold');
+  pdf.text('Article', 18, y + 5.5);
+  pdf.text('Quantité totale', 150, y + 5.5);
+  pdf.setTextColor(0, 0, 0); pdf.setFont(undefined, 'normal');
+  y += 8;
+
+  Object.entries(totauxParArticle).forEach(([nom, qte], i) => {
+    if (i % 2 === 1) { pdf.setFillColor(240, 240, 240); pdf.rect(15, y, 180, 8, 'F'); }
+    pdf.text(String(nom), 18, y + 5.5);
+    pdf.text(String(qte), 150, y + 5.5);
+    y += 8;
+  });
+
+  pdf.save(`Commande-fournisseur-${(titreCampagne || 'campagne').replace(/[^a-z0-9]+/gi, '-')}.pdf`);
 };
 
 // ==========================================================================
