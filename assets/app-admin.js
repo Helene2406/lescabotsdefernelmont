@@ -565,7 +565,7 @@ function optionsMarqueVaccin(valeurActuelle) {
   ).join('');
 }
 
-function ouvrirModalMembre(membre) {
+function ouvrirModalMembre(membre, prefill) {
   const isEdit = !!membre;
   const rc = membre?.assuranceRC || {};
   const chiens = (membre?.chiens || []).filter(c => !c.archive);
@@ -602,12 +602,13 @@ function ouvrirModalMembre(membre) {
 
         <h3 class="bloc-titre" style="margin-top:18px;">Coordonnées <span class="bloc-fleche">▾</span></h3>
         <div class="bloc-contenu">
-        <div class="field"><label>Nom du maître</label><input id="mm-nomMaitre" value="${isEdit ? escapeAttr(membre.nomMaitre) : ''}"></div>
+        ${prefill ? `<div class="banner-alert" style="margin-bottom:10px;">Fiche pré-remplie depuis une demande d'information reçue via le site. Pense à ajouter le chien une fois le membre enregistré :<br>Race : ${escapeHtml(prefill.raceChien || '—')} · Âge : ${escapeHtml(prefill.ageChien || '—')} · Stérilisé/castré : ${prefill.sterilise === 'oui' ? 'Oui' : prefill.sterilise === 'non' ? 'Non' : '—'}${prefill.demande ? `<br>Message du visiteur : « ${escapeHtml(prefill.demande)} »` : ''}</div>` : ''}
+        <div class="field"><label>Nom du maître</label><input id="mm-nomMaitre" value="${isEdit ? escapeAttr(membre.nomMaitre) : (prefill ? escapeAttr(`${prefill.prenom||''} ${prefill.nom||''}`.trim()) : '')}"></div>
         <div class="form-grid">
-          <div class="field"><label>GSM</label><input id="mm-gsm" value="${isEdit ? escapeAttr(membre.gsm||'') : ''}" placeholder="ex: 0032 4XX XX XX XX"></div>
-          <div class="field"><label>E-mail</label><input type="email" id="mm-email" value="${isEdit ? escapeAttr(membre.email||'') : ''}" placeholder="ex: nom@exemple.be"></div>
+          <div class="field"><label>GSM</label><input id="mm-gsm" value="${isEdit ? escapeAttr(membre.gsm||'') : (prefill ? escapeAttr(prefill.gsm||'') : '')}" placeholder="ex: 0032 4XX XX XX XX"></div>
+          <div class="field"><label>E-mail</label><input type="email" id="mm-email" value="${isEdit ? escapeAttr(membre.email||'') : (prefill ? escapeAttr(prefill.email||'') : '')}" placeholder="ex: nom@exemple.be"></div>
         </div>
-        <div class="field"><label>Adresse postale</label><input id="mm-adresse" value="${isEdit ? escapeAttr(membre.adressePostale||'') : ''}" placeholder="rue, numéro, code postal, ville"></div>
+        <div class="field"><label>Adresse postale</label><input id="mm-adresse" value="${isEdit ? escapeAttr(membre.adressePostale||'') : (prefill ? escapeAttr(prefill.ville||'') : '')}" placeholder="rue, numéro, code postal, ville"></div>
         <div class="field"><label>Date d'anniversaire</label><input type="date" id="mm-anniversaire" value="${isEdit ? (membre.dateAnniversaire||'') : ''}"></div>
 
         <div class="form-grid">
@@ -2364,7 +2365,7 @@ function renderArticlesBoutiqueAdmin() {
           <div class="data-title">${escapeHtml(a.nom)} ${!a.actif ? '<span class="badge badge-neutral">Masqué</span>' : ''}</div>
           <div class="data-sub">${Number(a.prix).toFixed(2)} € TTC · <span class="${a.stock <= 0 ? 'badge badge-danger' : 'badge badge-ok'}">${a.stock} en stock</span></div>
           <div class="data-sub">${a.reference ? `Réf. ${escapeHtml(a.reference)}` : ''}${a.poids ? ` · ${formaterPoids(a.poids, a.poidsUnite)} ${a.poidsUnite || 'g'}` : ''}</div>
-          ${a.infoDescription ? `<div class="data-sub" style="font-style:italic;">${escapeHtml(a.infoDescription.length > 100 ? a.infoDescription.slice(0, 100) + '…' : a.infoDescription)}</div>` : ''}
+          ${a.infoDescription ? `<div class="data-sub" style="font-style:italic;">${texteAvecLiens(a.infoDescription.length > 100 ? a.infoDescription.slice(0, 100) + '…' : a.infoDescription)}</div>` : ''}
         </div>
       </div>
       <div class="data-actions">
@@ -4122,12 +4123,15 @@ document.getElementById('btnExporterOdooNC').addEventListener('click', async () 
 // le cours reste décompté normalement, comme si la demande n'avait jamais
 // été faite.
 // ==========================================================================
+let currentDemandesInfo = [];
+
 async function chargerDemandesInfo() {
   const wrap = document.getElementById('listeDemandesInfo');
   if (!wrap) return;
   const snap = await getDocs(collection(db, 'demandes_info'));
   const demandes = [];
   snap.forEach(d => demandes.push({ id: d.id, ...d.data() }));
+  currentDemandesInfo = demandes;
   demandes.sort((a, b) => (b.dateEnvoi?.seconds || 0) - (a.dateEnvoi?.seconds || 0));
 
   const nbNonLues = demandes.filter(d => !d.lu).length;
@@ -4154,6 +4158,7 @@ async function chargerDemandesInfo() {
       </div>
       <div class="data-actions">
         ${!d.lu ? `<button class="btn-sm" onclick="window.marquerDemandeInfoLue('${d.id}')">Marquer comme lue</button>` : ''}
+        <button class="btn-sm primary" onclick="window.convertirDemandeEnMembre('${d.id}')">Convertir en fiche membre</button>
         <button class="btn-sm danger" onclick="window.supprimerDemandeInfo('${d.id}')">Supprimer</button>
       </div>
     </div>`;
@@ -4169,6 +4174,12 @@ window.supprimerDemandeInfo = async (id) => {
   if (!confirm('Supprimer cette demande ?')) return;
   await deleteDoc(doc(db, 'demandes_info', id));
   chargerDemandesInfo();
+};
+
+window.convertirDemandeEnMembre = (id) => {
+  const demande = currentDemandesInfo.find(d => d.id === id);
+  if (!demande) return;
+  ouvrirModalMembre(null, demande);
 };
 
 async function chargerDemandesAnnulation() {

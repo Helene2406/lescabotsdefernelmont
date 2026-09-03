@@ -956,7 +956,7 @@ async function chargerBoutiqueMembre() {
             <div class="data-main">
               <div class="data-title">${escapeHtml(a.nom)}</div>
               <div class="data-sub">${a.poids ? `${formaterPoids(a.poids, a.poidsUnite)} ${a.poidsUnite || 'g'} · ` : ''}${Number(a.prix).toFixed(2)} € TTC · ${a.stock > 0 ? `${a.stock} en stock` : '<span class="badge badge-danger">Rupture de stock</span>'}</div>
-              ${a.infoDescription ? `<div class="data-sub" style="white-space:pre-wrap;">${escapeHtml(a.infoDescription)}</div>` : ''}
+              ${a.infoDescription ? `<div class="data-sub" style="white-space:pre-wrap;">${texteAvecLiens(a.infoDescription)}</div>` : ''}
             </div>
           </div>
           <div class="data-actions">

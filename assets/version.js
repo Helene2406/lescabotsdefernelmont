@@ -9,4 +9,4 @@
 // Katia ET Hélène), l'espace membre (VERSION_SITE interne), et le pied de
 // page de toutes les pages publiques.
 // ==========================================================================
-export const VERSION_SITE = 'V01-007';
+export const VERSION_SITE = 'V01-008';
