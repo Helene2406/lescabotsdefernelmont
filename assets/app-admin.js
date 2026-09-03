@@ -1000,7 +1000,7 @@ async function chargerHistoriquePresencesAdmin(membreId) {
   if (!zone) return;
   const snap = await getDocs(query(collection(db, 'presences'), where('uid', '==', membreId)));
   const presences = [];
-  snap.forEach(d => presences.push(d.data()));
+  snap.forEach(d => presences.push({ id: d.id, ...d.data() }));
   presences.sort((a, b) => (b.dateISO || '').localeCompare(a.dateISO || ''));
 
   if (presences.length === 0) {
@@ -1020,9 +1020,86 @@ async function chargerHistoriquePresencesAdmin(membreId) {
         <div class="data-title">${p.dateISO || ''} — ${g ? escapeHtml(g.nom) : '?'}</div>
         <div class="data-sub">${badge}</div>
       </div>
+      <div class="data-actions">
+        <button class="btn-sm" onclick="window.editerPresenceAdmin('${p.id}','${membreId}','${p.statut}')">Modifier</button>
+        <button class="btn-sm danger" onclick="window.supprimerPresenceAdmin('${p.id}','${membreId}')">Supprimer</button>
+      </div>
     </div>`;
   }).join('');
 }
+
+// Une présence "décompte" un cours de l'abonnement si son statut est
+// 'present' (le membre est venu) ou 'absent-auto' (absent sans avoir
+// répondu à temps, pénalité). 'absent' (signalé à temps) et
+// 'absent-justifie' (annulation validée) ne décomptent jamais.
+function presenceEstDecomptee(statut) {
+  return statut === 'present' || statut === 'absent-auto';
+}
+
+window.editerPresenceAdmin = (presenceId, membreId, statutActuel) => {
+  const html = `
+    <div class="modal-overlay" id="modalOverlayPresence">
+      <div class="modal-box">
+        <h3>Modifier cette présence</h3>
+        <div class="field"><label>Statut</label>
+          <select id="pr-statut">
+            <option value="present" ${statutActuel === 'present' ? 'selected' : ''}>Présent (décompté)</option>
+            <option value="absent-auto" ${statutActuel === 'absent-auto' ? 'selected' : ''}>Absent — non répondu (décompté)</option>
+            <option value="absent-justifie" ${statutActuel === 'absent-justifie' ? 'selected' : ''}>Absent justifié (non décompté)</option>
+            <option value="absent" ${statutActuel === 'absent' ? 'selected' : ''}>Absent — signalé (non décompté)</option>
+          </select>
+        </div>
+        <p style="font-size:0.8rem; color:var(--slate);">Le nombre de cours restants de l'abonnement du membre est ajusté automatiquement si le changement de statut le nécessite.</p>
+        <div class="modal-actions">
+          <button class="btn-sm" type="button" onclick="document.getElementById('modalOverlayPresence').remove()">Annuler</button>
+          <button class="btn-sm primary" type="button" id="pr-save">Enregistrer</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+
+  document.getElementById('pr-save').addEventListener('click', async () => {
+    const nouveauStatut = document.getElementById('pr-statut').value;
+    const presSnap = await getDoc(doc(db, 'presences', presenceId));
+    if (!presSnap.exists()) { document.getElementById('modalOverlayPresence').remove(); return; }
+    const presence = presSnap.data();
+    const decompteAvant = presence.compteAbonnement === true; // était réellement décompté
+    const decompteApres = presenceEstDecomptee(nouveauStatut);
+
+    if (decompteAvant !== decompteApres) {
+      const membre = currentMembres.find(m => m.id === membreId) || currentMembresArchives.find(m => m.id === membreId);
+      const solde = membre ? (membre.coursRestants ?? 0) : 0;
+      // Repasse en "décompté" → -1 cours. Repasse en "non décompté" → +1 cours (remboursé).
+      const nouveauSolde = Math.max(0, solde + (decompteApres ? -1 : 1));
+      await updateDoc(doc(db, 'membres', membreId), { coursRestants: nouveauSolde });
+      if (membre) membre.coursRestants = nouveauSolde;
+    }
+
+    await updateDoc(doc(db, 'presences', presenceId), {
+      statut: nouveauStatut,
+      compteAbonnement: decompteApres,
+      modifieParAdmin: true
+    });
+
+    document.getElementById('modalOverlayPresence').remove();
+    chargerHistoriquePresencesAdmin(membreId);
+    renderMembres();
+  });
+};
+
+window.supprimerPresenceAdmin = async (presenceId, membreId) => {
+  if (!confirm('Supprimer cette entrée de l\'historique de présence ? Si elle était décomptée, le cours sera recrédité à l\'abonnement.')) return;
+  const presSnap = await getDoc(doc(db, 'presences', presenceId));
+  if (presSnap.exists() && presSnap.data().compteAbonnement === true) {
+    const membre = currentMembres.find(m => m.id === membreId) || currentMembresArchives.find(m => m.id === membreId);
+    const nouveauSolde = (membre ? (membre.coursRestants ?? 0) : 0) + 1;
+    await updateDoc(doc(db, 'membres', membreId), { coursRestants: nouveauSolde });
+    if (membre) membre.coursRestants = nouveauSolde;
+  }
+  await deleteDoc(doc(db, 'presences', presenceId));
+  chargerHistoriquePresencesAdmin(membreId);
+  renderMembres();
+};
 
 window.ouvrirModalPaiement = (membreId) => {
   const html = `
