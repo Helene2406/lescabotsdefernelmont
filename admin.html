@@ -40,7 +40,7 @@
   <div class="tab-bar">
     <button class="tab-btn active" data-tab="cesoir">Ce soir</button>
     <button class="tab-btn" data-tab="groupes">Groupes</button>
-    <button class="tab-btn" data-tab="membres">Membres</button>
+    <button class="tab-btn" data-tab="membres" id="tabMembresBtn">Membres</button>
     <button class="tab-btn" data-tab="services">Services</button>
     <button class="tab-btn" data-tab="rdv">RDV</button>
     <button class="tab-btn" data-tab="messages" id="tabMessagesBtn">Messages</button>
@@ -84,6 +84,13 @@
   </div>
 
   <div id="panel-membres" class="tab-panel hidden">
+    <div class="app-panel">
+      <h3 class="bloc-titre" id="titreDemandesInfo" style="margin-top:0;">📩 Demandes d'information (page "Nous contacter") <span class="bloc-fleche">▾</span></h3>
+      <div class="bloc-contenu" id="blocDemandesInfo">
+        <p style="font-size:0.85rem; color:var(--slate); margin-bottom:10px;">Demandes envoyées depuis le formulaire public de la page "Nous contacter".</p>
+        <div class="data-list" id="listeDemandesInfo"><div class="empty-state">...</div></div>
+      </div>
+    </div>
     <div class="app-panel">
       <div class="section-heading">
         <h2>Membres</h2>

@@ -131,6 +131,7 @@
     <div class="footer-bottom">
       <span>© 2026 Hélène Laruelle — Tous droits réservés<br>Site développé par Hélène Laruelle · Contenu sous la responsabilité de Katia Renard</span>
       <span>TVA BE 0729.593.814</span>
+      <span>Version <span id="versionPublic"></span></span>
     </div>
   </div>
 </footer>
@@ -144,5 +145,9 @@
   });
 </script>
 <img src="assets/logo-helene-laruelle.png" alt="Site développé par Hélène Laruelle" title="Site développé par Hélène Laruelle" class="badge-helene">
+<script type="module">
+  import { VERSION_SITE } from "./assets/version.js";
+  document.getElementById('versionPublic') && (document.getElementById('versionPublic').textContent = VERSION_SITE);
+</script>
 </body>
 </html>

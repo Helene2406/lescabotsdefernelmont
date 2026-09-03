@@ -1,4 +1,8 @@
-// Projet Firebase : cabots-de-fernelmont-901ee — Site "Les Cabots de Fernelmont" — V83
+// Projet Firebase : cabots-de-fernelmont-901ee — Site "Les Cabots de Fernelmont" — V01-001
+// Convention de versionnage des livraisons : VJJ-NNN (JJ = numéro du jour de
+// travail sur ce site, pas la date calendaire ; NNN = numéro de livraison
+// dans cette journée de travail, repart à 001 à chaque nouveau jour de
+// travail). Voir CONVENTION-VERSIONS.md à la racine du dépôt.
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -162,6 +166,21 @@ service cloud.firestore {
       allow read: if estAdmin();
       allow create: if estConnecte();
       allow update, delete: if false;
+    }
+
+    match /demandes_info/{id} {
+      // Formulaire public "Nous contacter" (page contact.html) — n'importe
+      // quel visiteur, non connecté, peut envoyer une demande. Personne
+      // côté public ne peut la relire, la modifier ni la supprimer : seul
+      // l'admin y a accès, depuis l'onglet Membres.
+      allow create: if request.resource.data.keys().hasOnly(
+          ['nom','prenom','email','gsm','ville','raceChien','ageChien','sterilise','demande','lu','dateEnvoi']) &&
+        request.resource.data.nom is string && request.resource.data.nom.size() > 0 &&
+        request.resource.data.prenom is string && request.resource.data.prenom.size() > 0 &&
+        request.resource.data.email is string && request.resource.data.email.size() > 0 &&
+        request.resource.data.demande is string && request.resource.data.demande.size() > 0 &&
+        request.resource.data.lu == false;
+      allow read, update, delete: if estAdmin();
     }
   }
 }

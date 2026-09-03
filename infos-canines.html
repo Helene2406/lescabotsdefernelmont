@@ -87,6 +87,7 @@
     <div class="footer-bottom">
       <span>© 2026 Les Cabots de Fernelmont — LES BEAUX CABOTS SRL — Tous droits réservés</span>
       <span>TVA BE 0729.593.814</span>
+      <span>Version <span id="versionPublic"></span></span>
     </div>
   </div>
 </footer>
@@ -98,6 +99,10 @@
     const isOpen = nav.classList.toggle('open');
     toggle.setAttribute('aria-expanded', isOpen);
   });
+</script>
+<script type="module">
+  import { VERSION_SITE } from "./assets/version.js";
+  document.getElementById('versionPublic') && (document.getElementById('versionPublic').textContent = VERSION_SITE);
 </script>
 </body>
 </html>

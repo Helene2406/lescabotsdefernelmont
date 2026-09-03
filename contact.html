@@ -77,6 +77,74 @@
   </div>
 </section>
 
+<section>
+  <div class="container">
+    <div class="contact-form-card">
+      <h2>Une question ? Une envie de nous rejoindre ?</h2>
+      <p>Laissez-nous vos coordonnées et quelques infos sur votre compagnon, Katia vous recontactera rapidement.</p>
+      <form id="formDemandeInfo">
+        <div class="cf-grid">
+          <div class="cf-field"><label>Nom *</label><input type="text" id="cf-nom" required></div>
+          <div class="cf-field"><label>Prénom *</label><input type="text" id="cf-prenom" required></div>
+          <div class="cf-field"><label>Adresse e-mail *</label><input type="email" id="cf-email" required></div>
+          <div class="cf-field"><label>GSM *</label><input type="tel" id="cf-gsm" required></div>
+          <div class="cf-field"><label>Région (ville) *</label><input type="text" id="cf-ville" required></div>
+          <div class="cf-field"><label>Race du chien *</label><input type="text" id="cf-race" required></div>
+          <div class="cf-field"><label>Âge du chien *</label><input type="text" id="cf-age" placeholder="ex: 8 mois, 3 ans..." required></div>
+          <div class="cf-field"><label>Castré / stérilisé *</label>
+            <select id="cf-sterilise" required>
+              <option value="">—</option>
+              <option value="oui">Oui</option>
+              <option value="non">Non</option>
+            </select>
+          </div>
+          <div class="cf-field cf-full"><label>Votre demande *</label><textarea id="cf-demande" required></textarea></div>
+        </div>
+        <p class="cf-note">* Champs obligatoires</p>
+        <button type="submit" class="btn btn-primary" id="cf-submit">Envoyer ma demande</button>
+        <p class="cf-statut" id="cf-statut"></p>
+      </form>
+    </div>
+  </div>
+</section>
+
+<script type="module">
+  import { db, collection, addDoc, serverTimestamp } from "./assets/firebase-config.js";
+  import { VERSION_SITE } from "./assets/version.js";
+  document.getElementById('versionPublic') && (document.getElementById('versionPublic').textContent = VERSION_SITE);
+
+  document.getElementById('formDemandeInfo').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const statutEl = document.getElementById('cf-statut');
+    const btn = document.getElementById('cf-submit');
+    btn.disabled = true;
+    statutEl.className = 'cf-statut';
+    statutEl.textContent = 'Envoi en cours...';
+    try {
+      await addDoc(collection(db, 'demandes_info'), {
+        nom: document.getElementById('cf-nom').value.trim(),
+        prenom: document.getElementById('cf-prenom').value.trim(),
+        email: document.getElementById('cf-email').value.trim(),
+        gsm: document.getElementById('cf-gsm').value.trim(),
+        ville: document.getElementById('cf-ville').value.trim(),
+        raceChien: document.getElementById('cf-race').value.trim(),
+        ageChien: document.getElementById('cf-age').value.trim(),
+        sterilise: document.getElementById('cf-sterilise').value,
+        demande: document.getElementById('cf-demande').value.trim(),
+        lu: false,
+        dateEnvoi: serverTimestamp()
+      });
+      document.getElementById('formDemandeInfo').reset();
+      statutEl.classList.add('ok');
+      statutEl.textContent = 'Merci ! Votre demande a bien été envoyée, Katia vous recontactera rapidement.';
+    } catch (err) {
+      statutEl.classList.add('err');
+      statutEl.textContent = "Une erreur est survenue, merci de réessayer ou de nous appeler directement.";
+    }
+    btn.disabled = false;
+  });
+</script>
+
 <footer class="site-footer">
   <div class="container">
     <div class="footer-grid">
@@ -109,6 +177,7 @@
       <span>© 2026 Hélène Laruelle — Tous droits réservés<br>Site développé par Hélène Laruelle · Contenu sous la responsabilité de Katia Renard</span>
       <span><a href="confidentialite.html">Confidentialité (RGPD)</a> &middot; <a href="cgv.html">CGV</a></span>
       <span>TVA BE 0729.593.814</span>
+      <span>Version <span id="versionPublic"></span></span>
     </div>
   </div>
 </footer>
