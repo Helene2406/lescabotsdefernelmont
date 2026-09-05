@@ -43,6 +43,12 @@
 
   <!-- ==================== ACCUEIL ==================== -->
   <div id="panel-accueil" class="tab-panel">
+    <div class="app-panel hidden" id="blocPremiereConnexion" style="background:#FFF7E6; border:1px solid #F0D9A0;">
+      <h2>🔒 Bienvenue !</h2>
+      <p style="color:var(--ink); margin-bottom:10px;">C'est votre première connexion. Pour votre sécurité, nous vous recommandons de <strong>changer votre mot de passe</strong> — rendez-vous dans l'onglet "Mon profil", tout en haut ("🔒 Changer mon mot de passe").</p>
+      <button class="btn-sm" id="btnFermerPremiereConnexion">J'ai compris</button>
+    </div>
+
     <div class="app-panel" id="blocNotifications">
       <h2>🔔 Notifications</h2>
       <p style="color:var(--slate); font-size:0.85rem; margin-bottom:10px;">Recevez une notification de votre navigateur pour les nouveaux messages de Katia et les nouveaux articles du blog — tant que cette page reste ouverte dans un onglet (même en arrière-plan).</p>
@@ -86,7 +92,19 @@
       <p style="color:var(--slate); font-size:0.85rem; margin-bottom:14px;">
         Vos coordonnées. Katia peut les voir, mais seule elle peut modifier votre abonnement et vos paiements.
       </p>
-      <h3 class="bloc-titre">Coordonnées <span class="bloc-fleche">▾</span></h3>
+      <h3 class="bloc-titre replie" id="titreChangerMdp">🔒 Changer mon mot de passe <span class="bloc-fleche">▾</span></h3>
+      <div class="bloc-contenu replie">
+      <div class="field"><label>Mot de passe actuel</label><input type="password" id="mp-mdpActuel" autocomplete="current-password"></div>
+      <div class="form-grid">
+        <div class="field"><label>Nouveau mot de passe</label><input type="password" id="mp-mdpNouveau" autocomplete="new-password"></div>
+        <div class="field"><label>Confirmer le nouveau mot de passe</label><input type="password" id="mp-mdpConfirmer" autocomplete="new-password"></div>
+      </div>
+      <p style="font-size:0.8rem; color:var(--slate); margin:-6px 0 10px;">Au moins 6 caractères. Une fois changé, utilisez ce nouveau mot de passe à votre prochaine connexion.</p>
+      <button class="btn-sm primary" id="btnChangerMdpMembre">Changer mon mot de passe</button>
+      <p id="mp-mdpStatut" style="font-size:0.85rem; margin-top:8px;"></p>
+      </div>
+
+      <h3 class="bloc-titre" style="margin-top:18px;">Coordonnées <span class="bloc-fleche">▾</span></h3>
       <div class="bloc-contenu">
       <div class="form-grid">
         <div class="field"><label>GSM</label><input id="mp-gsm" placeholder="ex: 0032 4XX XX XX XX"></div>

@@ -117,6 +117,7 @@
       // Garde toujours une référence à jour du mot de passe actuel — utile
       // pour dépanner quelqu'un qui l'oublie, quelle que soit la façon
       // dont il a été défini ou changé.
+      const estPremiereConnexion = !membreDoc.data().derniereConnexion;
       const misesAJour = {};
       if (membreDoc.data().motDePasseInitial !== motdepasse) {
         misesAJour.motDePasseInitial = motdepasse;
@@ -124,6 +125,9 @@
       misesAJour.derniereConnexion = new Date().toISOString();
       updateDoc(doc(db, 'membres', cred.user.uid), misesAJour).catch(() => {});
 
+      if (role !== 'admin' && estPremiereConnexion) {
+        sessionStorage.setItem('cabots_premiere_connexion', '1');
+      }
       window.location.href = role === 'admin' ? 'admin.html' : 'espace-membre.html';
     } catch (err) {
       errorBox.textContent = "Erreur Firestore : " + err.code + " — " + err.message;

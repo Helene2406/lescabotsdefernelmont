@@ -1,4 +1,4 @@
-// Projet Firebase : cabots-de-fernelmont-901ee — Site "Les Cabots de Fernelmont" — V01-008
+// Projet Firebase : cabots-de-fernelmont-901ee — Site "Les Cabots de Fernelmont" — V01-021
 // Convention de versionnage des livraisons : VJJ-NNN (JJ = numéro du jour de
 // travail sur ce site, pas la date calendaire ; NNN = numéro de livraison
 // dans cette journée de travail, repart à 001 à chaque nouveau jour de
@@ -38,8 +38,10 @@ service cloud.firestore {
     }
 
     match /presences/{id} {
-      allow read: if estConnecte();
-      allow create, update: if estConnecte();
+      // Un membre ne peut lire/écrire QUE ses propres présences (jamais
+      // celles des autres membres) — l'admin garde un accès complet.
+      allow read: if estConnecte() && (resource.data.uid == request.auth.uid || estAdmin());
+      allow create, update: if estAdmin() || (estConnecte() && request.resource.data.uid == request.auth.uid);
       allow delete: if estAdmin();
     }
 
@@ -59,13 +61,37 @@ service cloud.firestore {
     }
 
     match /rdv/{id} {
+      // Ne contient jamais la liste nominative des membres ciblés (voir
+      // rdv_admin et rdv_cibles ci-dessous) — uniquement le type de
+      // ciblage et, pour un ciblage par groupe, le groupeId (non personnel).
       allow read: if estConnecte();
       allow write: if estAdmin();
     }
 
+    match /rdv_admin/{id} {
+      // Liste nominative des membres ciblés par un RDV "individuel" —
+      // réservée à l'admin, jamais lisible par un membre (même le sien).
+      allow read, write: if estAdmin();
+    }
+
+    match /rdv_cibles/{id} {
+      // Un marqueur par membre ciblé (id = rdvId_uid). Chaque membre ne
+      // peut lire QUE ses propres marqueurs, jamais ceux des autres — donc
+      // jamais la liste des autres personnes invitées à un même RDV.
+      // "resource == null" autorise la lecture d'un marqueur qui n'existe
+      // pas (cas normal : le membre n'est simplement pas invité) sans que
+      // Firestore renvoie une erreur de permission au lieu d'un résultat
+      // vide.
+      allow read: if estConnecte() && (resource == null || resource.data.uid == request.auth.uid || estAdmin());
+      allow write: if estAdmin();
+    }
+
     match /rdv_reponses/{id} {
-      allow read: if estConnecte();
-      allow create, update: if estConnecte();
+      // Un membre ne peut lire/écrire QUE ses propres réponses de RDV
+      // (jamais qui d'autre vient, combien de personnes, ni le statut de
+      // paiement des autres) — l'admin garde un accès complet.
+      allow read: if estConnecte() && (resource.data.uid == request.auth.uid || estAdmin());
+      allow create, update: if estAdmin() || (estConnecte() && request.resource.data.uid == request.auth.uid);
       allow delete: if estAdmin();
     }
 
@@ -123,9 +149,13 @@ service cloud.firestore {
     }
 
     match /dogsitting/{id} {
-      // Lecture ouverte à tout membre connecté (nécessaire pour vérifier les
-      // chevauchements de dates entre TOUS les membres avant réservation).
-      allow read: if estConnecte();
+      // Un membre ne peut lire QUE ses propres demandes de Dog Sitting —
+      // jamais le nom du chien, les habitudes de vie ou le motif d'une
+      // période bloquée par Katia pour un AUTRE membre. La vérification de
+      // chevauchement de dates (nécessaire pour tous, voir plus bas) passe
+      // par le miroir "dogsitting_dates", qui ne contient aucune donnée
+      // personnelle.
+      allow read: if estConnecte() && (resource.data.membreId == request.auth.uid || estAdmin());
       allow create: if estAdmin() || (estConnecte() && request.resource.data.membreId == request.auth.uid);
       // Le membre peut mettre à jour SA PROPRE demande, mais seulement pour
       // signaler un paiement d'acompte ou marquer une notification comme vue
@@ -134,6 +164,19 @@ service cloud.firestore {
       allow update: if estAdmin() || (estConnecte() && resource.data.membreId == request.auth.uid &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['acomptePaye', 'vuParMembre']));
       allow delete: if estAdmin();
+    }
+
+    match /dogsitting_dates/{id} {
+      // Miroir minimal (dateDebut/dateFin/statut UNIQUEMENT, jamais de nom
+      // ni de notes) de la collection "dogsitting" ci-dessus. Lecture
+      // ouverte à tout membre connecté — c'est précisément pour que cette
+      // vérification n'ait jamais besoin de lire les vraies données
+      // personnelles des autres. Mise à jour/suppression réservées à
+      // l'admin, pour qu'un membre ne puisse pas modifier après coup une
+      // date déjà enregistrée (la sienne ou celle d'un autre).
+      allow read: if estConnecte();
+      allow create: if estAdmin() || (estConnecte() && request.resource.data.keys().hasOnly(['dateDebut', 'dateFin', 'statut']));
+      allow update, delete: if estAdmin();
     }
 
     match /campagnes/{id} {
