@@ -431,13 +431,8 @@ document.getElementById('btnImportMembres').addEventListener('click', () => ouvr
 
 function ouvrirModalImportMembres() {
   const exemplePreRempli =
-    'Jacqueline;jacqueline.h;dams123;Groupe 03\n' +
-    'Junior;junior.b;kalou123;Groupe 03\n' +
-    'Claire;claire.g;crush123;Groupe 03\n' +
-    'Frédéric;frederic.m;moka123;Groupe 03\n' +
-    'Johnny;johnny.d;freya123;Groupe 03\n' +
-    'Camille;camille.d;pizco123;Groupe 03\n' +
-    'Céline;celine.p;charly123;Groupe 03';
+    'Prénom Nom;identifiant;motdepasse;Nom du groupe\n' +
+    'Prénom Nom;identifiant;motdepasse;Nom du groupe';
 
   const html = `
     <div class="modal-overlay" id="modalOverlay">
@@ -1537,13 +1532,14 @@ document.getElementById('btnSauverIban').addEventListener('click', async () => {
   alert('IBAN enregistré.');
 });
 
-function libelleDestinataires(rdv) {
+function libelleDestinataires(rdv, membreIdsParRdv) {
   if (!rdv.destinataires || rdv.destinataires.type === 'tous') return 'Tous les membres';
   if (rdv.destinataires.type === 'groupe') {
     const g = currentGroupes.find(g => g.id === rdv.destinataires.groupeId);
     return 'Groupe : ' + (g ? g.nom : '—');
   }
-  const noms = (rdv.destinataires.membreIds || []).map(id => currentMembres.find(m => m.id === id)?.nomMaitre).filter(Boolean);
+  const membreIds = membreIdsParRdv?.[rdv.id] || [];
+  const noms = membreIds.map(id => currentMembres.find(m => m.id === id)?.nomMaitre).filter(Boolean);
   return 'Membres : ' + (noms.join(', ') || '—');
 }
 
@@ -1559,6 +1555,13 @@ async function chargerRdv() {
     wrap.innerHTML = '<div class="empty-state">Aucun RDV créé pour l\'instant.</div>';
     return;
   }
+
+  // Destinataires nominatifs : stockés à part (rdv_admin, réservé à
+  // l'admin) pour que la liste des membres ciblés par un RDV "individuel"
+  // ne soit jamais lisible par les membres eux-mêmes.
+  const adminSnap = await getDocs(collection(db, 'rdv_admin'));
+  const membreIdsParRdv = {};
+  adminSnap.forEach(d => { membreIdsParRdv[d.id] = d.data().membreIds || []; });
 
   const reponsesSnap = await getDocs(collection(db, 'rdv_reponses'));
   const reponsesParRdv = {};
@@ -1604,7 +1607,7 @@ async function chargerRdv() {
       <div class="data-main">
         <div class="data-title">${escapeHtml(rdv.titre)}</div>
         <div class="data-sub">${dateLabel} ${rdv.heure || ''} · ${escapeHtml(rdv.lieu || '')} · ${escapeHtml(rdv.modalite || '')}</div>
-        <div class="data-sub">${escapeHtml(libelleDestinataires(rdv))}${rdv.prixParPersonne ? ` · ${Number(rdv.prixParPersonne).toFixed(2)} €/pers.` : ''}</div>
+        <div class="data-sub">${escapeHtml(libelleDestinataires(rdv, membreIdsParRdv))}${rdv.prixParPersonne ? ` · ${Number(rdv.prixParPersonne).toFixed(2)} €/pers.` : ''}</div>
         <div class="data-sub">
           <span class="badge badge-ok">${presents.length} réponse(s) présent · ${totalPersonnes} pers.</span>
           ${rdv.prixParPersonne ? `<span class="badge badge-neutral">${totalDu.toFixed(2)} € attendus</span> <span class="badge badge-neutral">${valides}/${presents.length} paiements validés</span>` : ''}
@@ -1673,15 +1676,22 @@ document.getElementById('btnAjouterRdv').addEventListener('click', () => {
     if (!titre || !date) { alert('Merci de renseigner au moins un titre et une date.'); return; }
 
     const typeDest = document.getElementById('rd-destinatairesType').value;
-    let destinataires = { type: typeDest, groupeId: null, membreIds: [] };
+    let membreIdsCibles = [];
+    const destinataires = { type: typeDest, groupeId: null };
     if (typeDest === 'groupe') destinataires.groupeId = document.getElementById('rd-groupe').value;
     if (typeDest === 'individuel') {
-      destinataires.membreIds = [...document.querySelectorAll('.rd-membre-check:checked')].map(c => c.value);
+      membreIdsCibles = [...document.querySelectorAll('.rd-membre-check:checked')].map(c => c.value);
     }
 
     const prixVal = document.getElementById('rd-prix').value;
 
-    await addDoc(collection(db, 'rdv'), {
+    // Le RDV lui-même (lisible par tous les membres) ne contient JAMAIS la
+    // liste nominative des membres ciblés — seulement le type et, pour un
+    // ciblage par groupe, le groupeId (non personnel). La liste nominative
+    // va dans rdv_admin (réservé à l'admin), et un petit marqueur par
+    // membre ciblé va dans rdv_cibles, pour que chacun ne puisse vérifier
+    // QUE sa propre invitation, jamais celle des autres.
+    const refRdv = await addDoc(collection(db, 'rdv'), {
       titre, date,
       heure: document.getElementById('rd-heure').value,
       lieu: document.getElementById('rd-lieu').value.trim(),
@@ -1690,6 +1700,14 @@ document.getElementById('btnAjouterRdv').addEventListener('click', () => {
       destinataires,
       dateCreation: serverTimestamp()
     });
+
+    if (typeDest === 'individuel') {
+      await setDoc(doc(db, 'rdv_admin', refRdv.id), { membreIds: membreIdsCibles });
+      await Promise.all(membreIdsCibles.map(uid =>
+        setDoc(doc(db, 'rdv_cibles', `${refRdv.id}_${uid}`), { rdvId: refRdv.id, uid })
+      ));
+    }
+
     window.fermerModal();
     chargerRdv();
   });
@@ -1698,6 +1716,11 @@ document.getElementById('btnAjouterRdv').addEventListener('click', () => {
 window.supprimerRdv = async (id) => {
   if (!confirm('Supprimer ce RDV ? Les réponses des membres seront aussi supprimées.')) return;
   await deleteDoc(doc(db, 'rdv', id));
+  await deleteDoc(doc(db, 'rdv_admin', id)).catch(() => {});
+  const ciblesSnap = await getDocs(query(collection(db, 'rdv_cibles'), where('rdvId', '==', id)));
+  await Promise.all(ciblesSnap.docs.map(d => deleteDoc(d.ref)));
+  const reponsesSnap = await getDocs(query(collection(db, 'rdv_reponses'), where('rdvId', '==', id)));
+  await Promise.all(reponsesSnap.docs.map(d => deleteDoc(d.ref)));
   chargerRdv();
 };
 
@@ -3047,6 +3070,16 @@ window.facturerPaiement = async (paiementId) => {
 // et Katia doit la valider explicitement (2e chien accepté volontairement).
 // ==========================================================================
 let currentDogSitting = [];
+
+// Miroir minimal (dates + statut uniquement — jamais de nom de membre, de
+// chien, de notes ou de motif) de chaque entrée Dog Sitting, dans une
+// collection à part et largement lisible par les membres, pour que la
+// vérification de chevauchement de dates reste possible côté membre SANS
+// jamais exposer les données personnelles des autres membres (ni le motif
+// des périodes bloquées par Katia elle-même).
+async function syncDogSittingDates(id, dateDebut, dateFin, statut) {
+  await setDoc(doc(db, 'dogsitting_dates', id), { dateDebut, dateFin, statut });
+}
 let dsMoisAffiche = new Date(); dsMoisAffiche.setDate(1);
 
 async function chargerDogSittingAdmin() {
@@ -3148,13 +3181,14 @@ document.getElementById('btnBloquerPeriode').addEventListener('click', () => {
     const motif = document.getElementById('bl-motif').value.trim() || 'Indisponible';
     if (!dateDebut || !dateFin) { alert('Merci de renseigner les deux dates.'); return; }
     if (dateFin < dateDebut) { alert('La date de fin doit être après la date de début.'); return; }
-    await addDoc(collection(db, 'dogsitting'), {
+    const refBlocage = await addDoc(collection(db, 'dogsitting'), {
       membreId: null, chienNom: null, isBlocage: true, motifBlocage: motif,
       dateDebut, dateFin, heureArrivee: '', heureDepart: '',
       statut: 'validee', acompte: null, acompteValide: true,
       vuParAdmin: true, vuParMembre: true,
       dateCreation: serverTimestamp()
     });
+    await syncDogSittingDates(refBlocage.id, dateDebut, dateFin, 'validee');
     window.fermerModal();
     chargerDogSittingAdmin();
   });
@@ -3163,6 +3197,7 @@ document.getElementById('btnBloquerPeriode').addEventListener('click', () => {
 window.supprimerBlocage = async (id) => {
   if (!confirm('Supprimer ce blocage ? Les membres pourront à nouveau réserver sur cette période.')) return;
   await deleteDoc(doc(db, 'dogsitting', id));
+  await deleteDoc(doc(db, 'dogsitting_dates', id)).catch(() => {});
   chargerDogSittingAdmin();
 };
 
@@ -3272,6 +3307,8 @@ function renderListeDogSittingAdmin() {
 
 window.validerDogSitting = async (id) => {
   await updateDoc(doc(db, 'dogsitting', id), { statut: 'validee', vuParMembre: false });
+  const r = currentDogSitting.find(x => x.id === id);
+  if (r) await syncDogSittingDates(id, r.dateDebut, r.dateFin, 'validee');
   chargerDogSittingAdmin();
 };
 window.validerAcompteDogSitting = async (id) => {
@@ -3280,6 +3317,8 @@ window.validerAcompteDogSitting = async (id) => {
 };
 window.refuserDogSitting = async (id) => {
   await updateDoc(doc(db, 'dogsitting', id), { statut: 'refusee', vuParMembre: false });
+  const r = currentDogSitting.find(x => x.id === id);
+  if (r) await syncDogSittingDates(id, r.dateDebut, r.dateFin, 'refusee');
   chargerDogSittingAdmin();
 };
 window.annulerReservationDogSitting = (id) => {
@@ -3300,6 +3339,8 @@ window.annulerReservationDogSitting = (id) => {
     const motif = document.getElementById('ds-motif-annul').value.trim();
     if (!motif) { alert('Merci d\'indiquer un motif.'); return; }
     await updateDoc(doc(db, 'dogsitting', id), { statut: 'annulee', motifAnnulation: motif, vuParMembre: false });
+    const r = currentDogSitting.find(x => x.id === id);
+    if (r) await syncDogSittingDates(id, r.dateDebut, r.dateFin, 'annulee');
     document.getElementById('modalOverlayAnnulDS').remove();
     chargerDogSittingAdmin();
   });
@@ -3308,6 +3349,7 @@ window.annulerReservationDogSitting = (id) => {
 window.supprimerDogSitting = async (id) => {
   if (!confirm('Supprimer cette demande de Dog Sitting ?')) return;
   await deleteDoc(doc(db, 'dogsitting', id));
+  await deleteDoc(doc(db, 'dogsitting_dates', id)).catch(() => {});
   chargerDogSittingAdmin();
 };
 

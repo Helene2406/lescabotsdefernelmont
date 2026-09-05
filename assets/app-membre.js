@@ -5,7 +5,8 @@
 
 import {
   auth, db, onAuthStateChanged, signOut,
-  doc, getDoc, getDocAvecReessai, setDoc, getDocs, collection, addDoc, updateDoc, query, orderBy, where, serverTimestamp, onSnapshot
+  doc, getDoc, getDocAvecReessai, setDoc, getDocs, collection, addDoc, updateDoc, query, orderBy, where, serverTimestamp, onSnapshot,
+  updatePassword, reauthenticateWithCredential, EmailAuthProvider, identifiantVersEmail
 } from "./firebase-config.js";
 import { meteoPour, alerteMeteo, iconeCode } from "./meteo.js";
 
@@ -40,6 +41,18 @@ onAuthStateChanged(auth, async (user) => {
   membreUid = user.uid;
   membreData = mDoc.data();
   activerBlocsRepliables();
+
+  // Message de sécurité affiché une seule fois, juste après la toute
+  // première connexion du membre (voir connexion.html qui pose ce
+  // marqueur). sessionStorage s'efface tout seul à la fermeture de l'onglet
+  // — largement suffisant pour ne le montrer qu'à ce moment précis.
+  if (sessionStorage.getItem('cabots_premiere_connexion') === '1') {
+    sessionStorage.removeItem('cabots_premiere_connexion');
+    document.getElementById('blocPremiereConnexion')?.classList.remove('hidden');
+  }
+  document.getElementById('btnFermerPremiereConnexion')?.addEventListener('click', () => {
+    document.getElementById('blocPremiereConnexion').classList.add('hidden');
+  });
 
   // Dernière activité : mise à jour à chaque ouverture de page (pas
   // seulement à la connexion), y compris quand la session était déjà
@@ -128,6 +141,54 @@ document.getElementById('chatInputMembre').addEventListener('keydown', (e) => {
 });
 
 document.getElementById('logoutBtn').addEventListener('click', () => signOut(auth).then(() => window.location.href = 'connexion.html'));
+
+document.getElementById('btnChangerMdpMembre').addEventListener('click', async () => {
+  const statutEl = document.getElementById('mp-mdpStatut');
+  const mdpActuel = document.getElementById('mp-mdpActuel').value;
+  const mdpNouveau = document.getElementById('mp-mdpNouveau').value;
+  const mdpConfirmer = document.getElementById('mp-mdpConfirmer').value;
+  statutEl.style.color = 'var(--slate)';
+
+  if (!mdpActuel || !mdpNouveau || !mdpConfirmer) {
+    statutEl.style.color = '#B3432B';
+    statutEl.textContent = 'Merci de remplir les 3 champs.';
+    return;
+  }
+  if (mdpNouveau.length < 6) {
+    statutEl.style.color = '#B3432B';
+    statutEl.textContent = 'Le nouveau mot de passe doit faire au moins 6 caractères.';
+    return;
+  }
+  if (mdpNouveau !== mdpConfirmer) {
+    statutEl.style.color = '#B3432B';
+    statutEl.textContent = 'Les deux nouveaux mots de passe ne correspondent pas.';
+    return;
+  }
+
+  statutEl.style.color = 'var(--slate)';
+  statutEl.textContent = 'Modification en cours...';
+  try {
+    // Firebase exige une ré-authentification récente pour un changement de
+    // mot de passe — on revalide donc l'ancien mot de passe juste avant.
+    const credential = EmailAuthProvider.credential(identifiantVersEmail(membreData.identifiant), mdpActuel);
+    await reauthenticateWithCredential(auth.currentUser, credential);
+    await updatePassword(auth.currentUser, mdpNouveau);
+    // Garde le mot de passe visible par l'admin ("Mots de passe") à jour,
+    // pour qu'elle puisse continuer à dépanner en cas d'oubli.
+    await updateDoc(doc(db, 'membres', membreUid), { motDePasseInitial: mdpNouveau });
+
+    document.getElementById('mp-mdpActuel').value = '';
+    document.getElementById('mp-mdpNouveau').value = '';
+    document.getElementById('mp-mdpConfirmer').value = '';
+    statutEl.style.color = '#2F6B4F';
+    statutEl.textContent = 'Mot de passe changé avec succès ✓ Utilisez-le à votre prochaine connexion.';
+  } catch (err) {
+    statutEl.style.color = '#B3432B';
+    statutEl.textContent = err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password'
+      ? 'Le mot de passe actuel saisi est incorrect.'
+      : 'Erreur : ' + (err.code || err.message || err);
+  }
+});
 
 function nomsChiensActifs() {
   return (membreData.chiens || []).filter(c => !c.archive).map(c => c.nom).filter(Boolean).join(', ');
@@ -271,7 +332,7 @@ async function afficherProchainsCours() {
   const confirmations = {};
   confirmSnap.forEach(d => { confirmations[d.id] = d.data(); });
 
-  const presSnap = await getDocs(collection(db, 'presences'));
+  const presSnap = await getDocs(query(collection(db, 'presences'), where('uid', '==', membreUid)));
   const presences = {};
   presSnap.forEach(d => { presences[d.id] = d.data(); });
 
@@ -456,10 +517,15 @@ async function chargerServicesMembre() {
 // ==========================================================================
 // RDV — filtré par destinataires, prix par personne, paiement par virement
 // ==========================================================================
-function estInviteAuRdv(rdv) {
+async function estInviteAuRdv(rdv) {
   if (!rdv.destinataires || rdv.destinataires.type === 'tous') return true;
   if (rdv.destinataires.type === 'groupe') return rdv.destinataires.groupeId === membreData.groupeId;
-  if (rdv.destinataires.type === 'individuel') return (rdv.destinataires.membreIds || []).includes(membreUid);
+  if (rdv.destinataires.type === 'individuel') {
+    // Vérifie SA PROPRE invitation via un marqueur dédié (rdv_cibles) —
+    // jamais une liste partagée des autres membres invités.
+    const cibleDoc = await getDoc(doc(db, 'rdv_cibles', `${rdv.id}_${membreUid}`));
+    return cibleDoc.exists();
+  }
   return false;
 }
 
@@ -467,7 +533,8 @@ async function chargerRdv() {
   const snap = await getDocs(collection(db, 'rdv'));
   let rdvs = [];
   snap.forEach(d => rdvs.push({ id: d.id, ...d.data() }));
-  rdvs = rdvs.filter(estInviteAuRdv);
+  const invitations = await Promise.all(rdvs.map(estInviteAuRdv));
+  rdvs = rdvs.filter((r, i) => invitations[i]);
   rdvs.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
   const wrap = document.getElementById('zoneRdv');
@@ -479,7 +546,7 @@ async function chargerRdv() {
   const paramDoc = await getDoc(doc(db, 'parametres', 'bancaire'));
   const iban = paramDoc.exists() ? (paramDoc.data().iban || '') : '';
 
-  const reponseSnap = await getDocs(collection(db, 'rdv_reponses'));
+  const reponseSnap = await getDocs(query(collection(db, 'rdv_reponses'), where('uid', '==', membreUid)));
   const mesReponses = {};
   reponseSnap.forEach(d => {
     const r = d.data();
@@ -1297,7 +1364,10 @@ document.getElementById('ds-envoyer').addEventListener('click', async () => {
   try {
     // Vérifie s'il y a chevauchement avec une réservation déjà validée
     // (tous membres confondus) : un seul chien à la fois par défaut.
-    const snap = await getDocs(query(collection(db, 'dogsitting'), where('statut', '==', 'validee')));
+    // Utilise le miroir "dogsitting_dates" (dates + statut UNIQUEMENT,
+    // jamais de nom de membre/chien/notes) pour ne jamais exposer les
+    // données personnelles des autres membres pendant cette vérification.
+    const snap = await getDocs(query(collection(db, 'dogsitting_dates'), where('statut', '==', 'validee')));
     let chevauchement = false;
     snap.forEach(d => {
       const r = d.data();
@@ -1308,14 +1378,16 @@ document.getElementById('ds-envoyer').addEventListener('click', async () => {
     const nbJours = nbJoursDogSitting(dateDebut, dateFin);
     const total = prixJour * nbJours;
     const acompte = Math.round(total * TAUX_ACOMPTE_DOGSITTING_MEMBRE * 100) / 100;
+    const statutDemande = chevauchement ? 'attente' : 'validee';
 
-    await addDoc(collection(db, 'dogsitting'), {
+    const refDemande = await addDoc(collection(db, 'dogsitting'), {
       membreId: membreUid, chienNom, dateDebut, dateFin, heureArrivee, heureDepart,
       apporte, servicesDemandes, habitudesDeVie,
-      statut: chevauchement ? 'attente' : 'validee',
+      statut: statutDemande,
       total, acompte, acomptePaye: false, acompteValide: false, vuParMembre: true, vuParAdmin: false,
       dateCreation: serverTimestamp()
     });
+    await setDoc(doc(db, 'dogsitting_dates', refDemande.id), { dateDebut, dateFin, statut: statutDemande });
 
     statutEl.textContent = chevauchement
       ? 'Ces dates chevauchent une réservation existante : votre demande est en attente de validation par Katia.'
@@ -1468,7 +1540,9 @@ const ENTREPRISE_MEMBRE = {
 const TAUX_TVA_MEMBRE = 21;
 
 window.telechargerMaFacture = async (numeroFacture) => {
-  const snap = await getDocs(query(collection(db, 'factures'), where('numero', '==', numeroFacture)));
+  // Filtre à la fois par numéro ET par son propre membreId : garantit qu'un
+  // membre ne peut jamais récupérer la facture d'un autre, même en théorie.
+  const snap = await getDocs(query(collection(db, 'factures'), where('numero', '==', numeroFacture), where('membreId', '==', membreUid)));
   if (snap.empty) { alert('Facture introuvable.'); return; }
   const facture = snap.docs[0].data();
 
